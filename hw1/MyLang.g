@@ -21,11 +21,13 @@ tokens {
   ReturnToken;
   BreakToken;
   VarDeclToken;
-  BlockToken;
   SliceToken;
   RangeToken;
   ArrayToken;
   CallToken;
+  Test1;
+    Test2;
+
 }
 
 source
@@ -33,7 +35,7 @@ source
   ;
 
 sourceItem
-  :  'def' funcSignature body 'end'-> ^(FuncDefToken funcSignature body)
+  :  'def' funcSignature body -> ^(FuncDefToken funcSignature body)
   |   varDeclaration -> ^(VarDeclToken varDeclaration)
   ;
 
@@ -84,7 +86,7 @@ condStatement
   ;
 
 loopStatement
-  :  ('while'|'until') expression body 'end'  -> ^(LoopToken ^(ExpressionToken expression) ^(LoopToken body))
+  :  ('while'|'until') expression 'begin' body 'end'  -> ^(LoopToken ^(ExpressionToken expression) ^(LoopToken body))
   ;
 
 returnStatement
@@ -101,10 +103,6 @@ breakStatement
 
 expressionStatement
   :  expression ';'
-  ;
-
-blockStatement
-  : ('begin' | '{') (statement | source | typeRef)* ('end' | '}')
   ;
 
 expression
@@ -188,23 +186,27 @@ varDeclaration
 
 typeRef
     : arrayType
-    | identifier
-    | builtin
+    | basicType
     ;
-
-arrayType
-    : 'array' '[' dec ']' typeRef  -> ^(ArrayToken dec)
-    ;
-
-dec : Dec;
 
 builtin
   :   BuiltIn
   ;
+arrayType
+    :  basicType ('array' '[' dec ']')* -> ^(ArrayToken basicType dec)
+    ;
+
+basicType:
+    | builtin
+    | identifier;
 
 identifier
   :  Identifier
   ;
+
+dec
+    :   Dec
+    ;
 
 Literal
   :  Bool
@@ -219,13 +221,13 @@ fragment
 Bool:  ('true'|'false');
 
 fragment
+Dec  :  ('0'..'9')+;
+
+fragment
 Bits:  '0' ('b'|'B') ('0'..'1')+;
 
 fragment
 Hex :  '0' ('x'|'X') ('0'..'9'|'a'..'f'|'A'..'F')+;
-
-fragment
-Dec  :  ('0'..'9')+;
 
 fragment
 Char:  '\'' ~('\'') '\'';

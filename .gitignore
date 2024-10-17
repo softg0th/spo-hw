@@ -39,6 +39,8 @@ obj/
 *.tmp/
 *.pdb
 *.db
+.cmake-build-debug
+.cmake-build-debug-wsl
 CMakeOutput.log
 CMakeError.log
 .vscode/

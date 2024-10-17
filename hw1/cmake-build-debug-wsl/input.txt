@@ -1,8 +1,0 @@
-def sumArray() of int
-    var data of int
-    while data
-    end
-end
-
-def exp() of int
-end

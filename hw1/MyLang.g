@@ -24,10 +24,9 @@ tokens {
   SliceToken;
   RangeToken;
   ArrayToken;
+  ArrayTokenSuffix;
   CallToken;
-  Test1;
-    Test2;
-
+  ArrayList;
 }
 
 source
@@ -35,8 +34,7 @@ source
   ;
 
 sourceItem
-  :  'def' funcSignature body -> ^(FuncDefToken funcSignature body)
-  |   varDeclaration -> ^(VarDeclToken varDeclaration)
+  :  'def' funcSignature 'begin' body 'end' -> ^(FuncDefToken funcSignature body)
   ;
 
 funcSignature
@@ -52,25 +50,42 @@ arg
   ;
 
 statement
-  :  expression ';'!
+  :  expression ';'
   |  loopStatement
   |  breakStatement
   |  expressionStatement
   |  condStatement
   |  repeatStatement
   |  returnStatement
-  |  varDeclStatement
   |  assignmentStatement
   |  callStatement
+  |  varDeclaration
+  |  arrayType
   ;
 
- body
-	:	statement* -> ^(Body statement*)
-	;
+body
+  :  statement* -> ^(Body statement*)
+  ;
 
-varDeclStatement
-    :   'var' identifier ('of' typeRef)? ('=' expression)? -> ^(VarDeclToken identifier typeRef? expression?)
+typeRef
+  : builtin
+  | arrayList
+  | identifier
+  ;
+
+dec
+    :   Dec
     ;
+
+arrayList
+  :  (arrayType (arrayType)*) -> ^(ArrayList arrayType)
+  ;
+
+arrayType
+  : builtin 'array' '[' Literal ']' -> ^(ArrayToken builtin Literal)
+  | 'array' '[' Literal ']' -> ^(ArrayTokenSuffix Literal)
+  | identifier 'array' '[' Literal ']' -> ^(ArrayToken identifier Literal)
+  ;
 
 assignmentStatement
     : identifier '=' expression -> ^(AssignmentOp ^(Identifier identifier) expression)
@@ -86,7 +101,7 @@ condStatement
   ;
 
 loopStatement
-  :  ('while'|'until') expression 'begin' body 'end'  -> ^(LoopToken ^(ExpressionToken expression) ^(LoopToken body))
+  :  ('while'|'until') expression '{' body '}'  -> ^(LoopToken ^(ExpressionToken expression) ^(LoopToken body))
   ;
 
 returnStatement
@@ -94,7 +109,7 @@ returnStatement
   ;
 
 repeatStatement
-  :  'repeat' body ('while'|'until') expression -> ^(RepeatToken ^(RepeatToken body) ^(ExpressionToken expression))
+  :  'repeat' '{' body '}' ('while'|'until') expression -> ^(RepeatToken ^(RepeatToken body) ^(ExpressionToken expression))
   ;
 
 breakStatement
@@ -184,29 +199,10 @@ varDeclaration
   : 'var' identifier ('of' typeRef)? ('=' expression)? -> ^(VarDeclToken identifier typeRef? expression?)
   ;
 
-typeRef
-    : arrayType
-    | basicType
-    ;
 
 builtin
   :   BuiltIn
   ;
-arrayType
-    :  basicType ('array' '[' dec ']')* -> ^(ArrayToken basicType dec)
-    ;
-
-basicType:
-    | builtin
-    | identifier;
-
-identifier
-  :  Identifier
-  ;
-
-dec
-    :   Dec
-    ;
 
 Literal
   :  Bool
@@ -217,17 +213,21 @@ Literal
   |  Str
   ;
 
-fragment
-Bool:  ('true'|'false');
+identifier
+  :  Identifier
+  ;
 
 fragment
-Dec  :  ('0'..'9')+;
+Bool:  ('true'|'false');
 
 fragment
 Bits:  '0' ('b'|'B') ('0'..'1')+;
 
 fragment
 Hex :  '0' ('x'|'X') ('0'..'9'|'a'..'f'|'A'..'F')+;
+
+fragment
+Dec  :  ('0'..'9')+;
 
 fragment
 Char:  '\'' ~('\'') '\'';

@@ -1,0 +1,5 @@
+def sumArray() of int
+begin
+data array[10] array[7] array[9]
+return data
+end

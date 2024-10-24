@@ -1,31 +1,11 @@
 #include <string.h>
 
 #include "MyLangLexer.h"
-#include "MyLangParser.h"
-#include <antlr3treeparser.h>
 #include <antlr3.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-
-
-void printTree(pANTLR3_BASE_TREE tree, int depth) {
-    if (tree == NULL) {
-        return;
-    }
-
-    for (int i = 0; i < depth; ++i) {
-        printf("   ");
-    }
-
-    printf("%s\n", (char*)tree->toString(tree)->chars);
-
-    unsigned int childCount = tree->getChildCount(tree);
-    for (unsigned int i = 0; i < childCount; ++i) {
-        printTree((pANTLR3_BASE_TREE)tree->getChild(tree, i), depth + 1);
-    }
-}
+#include "ast.h"
 
 int main(void)
 {
@@ -59,30 +39,7 @@ int main(void)
         }
         strcat(content, line);
     }
-
-    const pANTLR3_UINT8 input_string = (pANTLR3_UINT8) content;
-
-    const pANTLR3_INPUT_STREAM input = antlr3StringStreamNew(input_string, ANTLR3_ENC_8BIT, strlen(input_string),(pANTLR3_UINT8)"SPOparser");
-    const pMyLangLexer lex = MyLangLexerNew(input);
-    const pANTLR3_COMMON_TOKEN_STREAM tokens = antlr3CommonTokenStreamSourceNew(ANTLR3_SIZE_HINT, TOKENSOURCE(lex));
-    const pMyLangParser parser = MyLangParserNew(tokens);
-    const MyLangParser_source_return r = parser->source(parser);
-    if (parser->pParser->rec->state->errorCount > 0) {
-        parser->free(parser);
-        tokens->free(tokens);
-        lex->free(lex);
-        input->close(input);
-        fclose(file);
-        return 1;
-    }
-    pANTLR3_BASE_TREE ast = r.tree;
-
-    printTree(ast, 0);
-
-    parser->free(parser);
-    tokens->free(tokens);
-    lex->free(lex);
-    input->close(input);
+    makeTree(content);
     fclose(file);
     return 0;
 }

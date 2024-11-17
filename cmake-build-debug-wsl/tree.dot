@@ -1,0 +1,123 @@
+digraph {
+
+	ordering=out;
+	ranksep=.4;
+	bgcolor="lightgrey";  node [shape=box, fixedsize=false, fontsize=12, fontname="Helvetica-bold", fontcolor="blue"
+	width=.25, height=.25, color="black", fillcolor="white", style="filled, solid, bold"];
+
+	edge [arrowsize=.5, color="black", style="bold"]
+
+	n0x7ffff79d4128[label="SourceToken"]
+	n0x7ffff79d3ff0[label="FuncDefToken"]
+	n0x7ffff79a3660[label="FuncSignatureToken"]
+	n0x7ffff79a3798[label="Identifier"]
+	n0x7ffff79a3180[label="sumArray"]
+	n0x7ffff79a33f0[label="ArgListToken"]
+	n0x7ffff79a3528[label="int"]
+	n0x7ffff79d3b10[label="Body"]
+	n0x7ffff79a8940[label="ArrayToken"]
+	n0x7ffff79a86d0[label="data"]
+	n0x7ffff79a8808[label="10"]
+	n0x7ffff79a8ce8[label="ArrayTokenSuffix"]
+	n0x7ffff79a8bb0[label="7"]
+	n0x7ffff79a9090[label="ArrayTokenSuffix"]
+	n0x7ffff79a8f58[label="9"]
+	n0x7ffff79a9a50[label="VarDeclToken"]
+	n0x7ffff79a96a8[label="data"]
+	n0x7ffff79a9918[label="bool"]
+	n0x7ffff79ab3e8[label="VarDeclToken"]
+	n0x7ffff79ab040[label="name"]
+	n0x7ffff79ab2b0[label="int"]
+	n0x7ffff79ac288[label="2"]
+	n0x7ffff79aceb8[label="VarDeclToken"]
+	n0x7ffff79acb10[label="em"]
+	n0x7ffff79acd80[label="int"]
+	n0x7ffff79add58[label="3"]
+	n0x7ffff79cd378[label="LoopToken"]
+	n0x7ffff79cd4b0[label="ExpressionToken"]
+	n0x7ffff79bf200[label="=="]
+	n0x7ffff79bf950[label="name"]
+	n0x7ffff79bfa88[label="2"]
+	n0x7ffff79cd5e8[label="LoopToken"]
+	n0x7ffff79cc880[label="Body"]
+	n0x7ffff79cce98[label="CondToken"]
+	n0x7ffff79ccfd0[label="ExpressionToken"]
+	n0x7ffff79c76d8[label="=="]
+	n0x7ffff79c7e28[label="em"]
+	n0x7ffff79c7f60[label="3"]
+	n0x7ffff79cd108[label="CondToken"]
+	n0x7ffff79c7810[label="Body"]
+	n0x7ffff79c71f8[label="break"]
+	n0x7ffff79c7330[label=";"]
+	n0x7ffff79cd240[label="CondToken"]
+	n0x7ffff79ccaf0[label="Body"]
+	n0x7ffff79caee8[label="break"]
+	n0x7ffff79cb020[label=";"]
+	n0x7ffff79ccd60[label="VarDeclToken"]
+	n0x7ffff79cc9b8[label="foo"]
+	n0x7ffff79ccc28[label="int"]
+	n0x7ffff79cdc00[label="10"]
+	n0x7ffff79d2790[label="ArrayToken"]
+	n0x7ffff79d2520[label="new"]
+	n0x7ffff79d2658[label="1"]
+	n0x7ffff79d3d80[label="ReturnToken"]
+	n0x7ffff79d3eb8[label="ExpressionToken"]
+	n0x7ffff79d4ae8[label="data"]
+
+		n0x7ffff79d4128 -> n0x7ffff79d3ff0		// SourceToken -> FuncDefToken
+		n0x7ffff79d3ff0 -> n0x7ffff79a3660		// FuncDefToken -> FuncSignatureToken
+		n0x7ffff79a3660 -> n0x7ffff79a3798		// FuncSignatureToken -> Identifier
+		n0x7ffff79a3798 -> n0x7ffff79a3180		// Identifier -> sumArray
+		n0x7ffff79a3660 -> n0x7ffff79a33f0		// FuncSignatureToken -> ArgListToken
+		n0x7ffff79a3660 -> n0x7ffff79a3528		// FuncSignatureToken -> int
+		n0x7ffff79d3ff0 -> n0x7ffff79d3b10		// FuncDefToken -> Body
+		n0x7ffff79d3b10 -> n0x7ffff79a8940		// Body -> ArrayToken
+		n0x7ffff79a8940 -> n0x7ffff79a86d0		// ArrayToken -> data
+		n0x7ffff79a8940 -> n0x7ffff79a8808		// ArrayToken -> 10
+		n0x7ffff79a8940 -> n0x7ffff79a8ce8		// ArrayToken -> ArrayTokenSuffix
+		n0x7ffff79a8ce8 -> n0x7ffff79a8bb0		// ArrayTokenSuffix -> 7
+		n0x7ffff79a8ce8 -> n0x7ffff79a9090		// ArrayTokenSuffix -> ArrayTokenSuffix
+		n0x7ffff79a9090 -> n0x7ffff79a8f58		// ArrayTokenSuffix -> 9
+		n0x7ffff79d3b10 -> n0x7ffff79a9a50		// Body -> VarDeclToken
+		n0x7ffff79a9a50 -> n0x7ffff79a96a8		// VarDeclToken -> data
+		n0x7ffff79a9a50 -> n0x7ffff79a9918		// VarDeclToken -> bool
+		n0x7ffff79d3b10 -> n0x7ffff79ab3e8		// Body -> VarDeclToken
+		n0x7ffff79ab3e8 -> n0x7ffff79ab040		// VarDeclToken -> name
+		n0x7ffff79ab3e8 -> n0x7ffff79ab2b0		// VarDeclToken -> int
+		n0x7ffff79ab3e8 -> n0x7ffff79ac288		// VarDeclToken -> 2
+		n0x7ffff79d3b10 -> n0x7ffff79aceb8		// Body -> VarDeclToken
+		n0x7ffff79aceb8 -> n0x7ffff79acb10		// VarDeclToken -> em
+		n0x7ffff79aceb8 -> n0x7ffff79acd80		// VarDeclToken -> int
+		n0x7ffff79aceb8 -> n0x7ffff79add58		// VarDeclToken -> 3
+		n0x7ffff79d3b10 -> n0x7ffff79cd378		// Body -> LoopToken
+		n0x7ffff79cd378 -> n0x7ffff79cd4b0		// LoopToken -> ExpressionToken
+		n0x7ffff79cd4b0 -> n0x7ffff79bf200		// ExpressionToken -> ==
+		n0x7ffff79bf200 -> n0x7ffff79bf950		// == -> name
+		n0x7ffff79bf200 -> n0x7ffff79bfa88		// == -> 2
+		n0x7ffff79cd378 -> n0x7ffff79cd5e8		// LoopToken -> LoopToken
+		n0x7ffff79cd5e8 -> n0x7ffff79cc880		// LoopToken -> Body
+		n0x7ffff79cc880 -> n0x7ffff79cce98		// Body -> CondToken
+		n0x7ffff79cce98 -> n0x7ffff79ccfd0		// CondToken -> ExpressionToken
+		n0x7ffff79ccfd0 -> n0x7ffff79c76d8		// ExpressionToken -> ==
+		n0x7ffff79c76d8 -> n0x7ffff79c7e28		// == -> em
+		n0x7ffff79c76d8 -> n0x7ffff79c7f60		// == -> 3
+		n0x7ffff79cce98 -> n0x7ffff79cd108		// CondToken -> CondToken
+		n0x7ffff79cd108 -> n0x7ffff79c7810		// CondToken -> Body
+		n0x7ffff79c7810 -> n0x7ffff79c71f8		// Body -> break
+		n0x7ffff79c7810 -> n0x7ffff79c7330		// Body -> ;
+		n0x7ffff79cce98 -> n0x7ffff79cd240		// CondToken -> CondToken
+		n0x7ffff79cd240 -> n0x7ffff79ccaf0		// CondToken -> Body
+		n0x7ffff79ccaf0 -> n0x7ffff79caee8		// Body -> break
+		n0x7ffff79ccaf0 -> n0x7ffff79cb020		// Body -> ;
+		n0x7ffff79ccaf0 -> n0x7ffff79ccd60		// Body -> VarDeclToken
+		n0x7ffff79ccd60 -> n0x7ffff79cc9b8		// VarDeclToken -> foo
+		n0x7ffff79ccd60 -> n0x7ffff79ccc28		// VarDeclToken -> int
+		n0x7ffff79ccd60 -> n0x7ffff79cdc00		// VarDeclToken -> 10
+		n0x7ffff79d3b10 -> n0x7ffff79d2790		// Body -> ArrayToken
+		n0x7ffff79d2790 -> n0x7ffff79d2520		// ArrayToken -> new
+		n0x7ffff79d2790 -> n0x7ffff79d2658		// ArrayToken -> 1
+		n0x7ffff79d3b10 -> n0x7ffff79d3d80		// Body -> ReturnToken
+		n0x7ffff79d3d80 -> n0x7ffff79d3eb8		// ReturnToken -> ExpressionToken
+		n0x7ffff79d3eb8 -> n0x7ffff79d4ae8		// ExpressionToken -> data
+
+}

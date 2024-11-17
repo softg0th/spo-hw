@@ -1,0 +1,16 @@
+def sumArray() of int
+begin
+data array[10] array[7] array[9]
+var data of bool
+var name of int = 2
+var em of int = 3
+while name == 2 {
+    if em == 3 then
+        break;
+    else
+        break;
+    var foo of int = 10
+}
+new array[1]
+return data
+end

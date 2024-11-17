@@ -1,15 +1,15 @@
 #include <string.h>
 
-#include "MyLangLexer.h"
+#include "lang/MyLangLexer.h"
 #include <antlr3.h>
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "ast.h"
+#include "ast/ast.h"
 
 int main(void)
 {
-    const char* filename = "input.txt";
+    char* filename = "input.txt";
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
         perror("Ошибка при открытии файла");
@@ -39,7 +39,7 @@ int main(void)
         }
         strcat(content, line);
     }
-    makeTree(content);
+    makeTree(content, filename);
     fclose(file);
     return 0;
 }

@@ -1,3 +1,4 @@
 #include <antlr3.h>
+#include "graphStructures.h"
 
-void buildCFG(pANTLR3_BASE_TREE tree, char* file_name) {}
+void processTree(pANTLR3_BASE_TREE tree);

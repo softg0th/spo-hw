@@ -1,0 +1,8 @@
+digraph CFG {
+    node [shape=box];
+    Node0 [label="FuncDefToken"];
+    Node0 -> Node2 [label="next"];
+    Node2 [label="FuncDefToken"];
+    Node2 -> Node1 [label="next"];
+    Node1 [label="Node1"];
+}

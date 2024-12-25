@@ -1,0 +1,16 @@
+digraph CFG {
+    node [shape=box];
+    Node35 [label="func_1"];
+    Node35 -> Node37 [label=""];
+    Node37 [label="e"];
+    Node37 -> Node38 [label=""];
+    Node38 [label="bool"];
+    Node38 -> Node39 [label=""];
+    Node39 [label="example"];
+    Node39 -> Node40 [label=""];
+    Node40 [label="int"];
+    Node40 -> Node41 [label=""];
+    Node41 [label="7"];
+    Node41 -> Node36 [label=""];
+    Node36 [label="func_exit"];
+}

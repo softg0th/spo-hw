@@ -2,7 +2,8 @@
 
 #include "../lang/MyLangLexer.h"
 #include "../lang/MyLangParser.h"
-//#include "../graph/graph.h"
+#include "../graph/graph.h"
+#include "../graph/graphStructures.h"
 #include <antlr3.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -26,7 +27,7 @@ pANTLR3_BASE_TREE rebuildTree(pANTLR3_BASE_TREE tree) {
     for (unsigned int i = 0; i < childCount; ++i) {
         pANTLR3_BASE_TREE child = (pANTLR3_BASE_TREE)tree->getChild(tree, i);
         char* childNode = (char*)child->toString(child)->chars;
-        printf("%s\n", childNode);
+        //printf("%s\n", childNode);
         if (strcmp(currentNode, "Body") == 0) {
             sourceNode = tree;
         }
@@ -68,7 +69,7 @@ void drawTree(const pMyLangParser parser, pANTLR3_BASE_TREE tree) {
         perror("Could not open file for writing");
         return;
     }
-    fprintf(file, "%s", output->chars);
+    //fprintf(file, "%s", output->chars);
     fclose(file);
 
     const char *generateTree = "dot -Tpng tree.dot -o output.png";
@@ -97,10 +98,9 @@ void makeTree(char *content, char *filename) {
 
     pANTLR3_BASE_TREE ast = r.tree;
     drawTree(parser, ast);
-    printf("end");
+    processTree(ast);
     parser->free(parser);
     tokens->free(tokens);
     lex->free(lex);
     input->close(input);
-    // buildCFG(ast, filename);
 }

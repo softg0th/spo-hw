@@ -167,10 +167,13 @@ CMakeFiles/spo.dir/ast/ast.c.o: ../ast/ast.c \
   /usr/local/include/antlr3filestream.h \
   /usr/local/include/antlr3rewritestreams.h \
   ../lang/MyLangParser.h \
+  ../graph/graph.h \
+  ../graph/graphStructures.h \
+  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
+  ../graph/graphStructures.h \
   /usr/include/dirent.h \
   /usr/include/x86_64-linux-gnu/bits/dirent.h \
-  /usr/include/x86_64-linux-gnu/bits/dirent_ext.h \
-  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h
+  /usr/include/x86_64-linux-gnu/bits/dirent_ext.h
 
 CMakeFiles/spo.dir/graph/graph.c.o: ../graph/graph.c \
   /usr/include/stdc-predef.h \
@@ -198,20 +201,15 @@ CMakeFiles/spo.dir/graph/graph.c.o: ../graph/graph.c \
   /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
   /usr/include/x86_64-linux-gnu/bits/floatn.h \
   /usr/include/x86_64-linux-gnu/bits/floatn-common.h \
-  /usr/local/include/antlr3.h \
-  /usr/local/include/antlr3defs.h \
-  /usr/local/include/antlr3errors.h \
-  /usr/local/include/antlr3config.h \
-  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdint.h \
-  /usr/include/stdint.h \
-  /usr/include/x86_64-linux-gnu/bits/wchar.h \
-  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
-  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+  /usr/include/stdlib.h \
+  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
+  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
   /usr/include/x86_64-linux-gnu/sys/types.h \
   /usr/include/x86_64-linux-gnu/bits/types/clock_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/clockid_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/time_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/timer_t.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
   /usr/include/endian.h \
   /usr/include/x86_64-linux-gnu/bits/endian.h \
   /usr/include/x86_64-linux-gnu/bits/endianness.h \
@@ -229,18 +227,24 @@ CMakeFiles/spo.dir/graph/graph.c.o: ../graph/graph.c \
   /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
   /usr/include/x86_64-linux-gnu/bits/struct_mutex.h \
   /usr/include/x86_64-linux-gnu/bits/struct_rwlock.h \
-  /usr/include/x86_64-linux-gnu/sys/stat.h \
-  /usr/include/x86_64-linux-gnu/bits/stat.h \
-  /usr/include/x86_64-linux-gnu/bits/struct_stat.h \
-  /usr/include/stdlib.h \
-  /usr/include/x86_64-linux-gnu/bits/waitflags.h \
-  /usr/include/x86_64-linux-gnu/bits/waitstatus.h \
   /usr/include/alloca.h \
   /usr/include/x86_64-linux-gnu/bits/stdlib-float.h \
   /usr/include/string.h \
   /usr/include/x86_64-linux-gnu/bits/types/locale_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/__locale_t.h \
   /usr/include/strings.h \
+  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
+  /usr/local/include/antlr3.h \
+  /usr/local/include/antlr3defs.h \
+  /usr/local/include/antlr3errors.h \
+  /usr/local/include/antlr3config.h \
+  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdint.h \
+  /usr/include/stdint.h \
+  /usr/include/x86_64-linux-gnu/bits/wchar.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+  /usr/include/x86_64-linux-gnu/sys/stat.h \
+  /usr/include/x86_64-linux-gnu/bits/stat.h \
+  /usr/include/x86_64-linux-gnu/bits/struct_stat.h \
   /usr/include/inttypes.h \
   /usr/include/unistd.h \
   /usr/include/x86_64-linux-gnu/bits/posix_opt.h \
@@ -337,7 +341,7 @@ CMakeFiles/spo.dir/graph/graph.c.o: ../graph/graph.c \
   /usr/local/include/antlr3filestream.h \
   /usr/local/include/antlr3rewritestreams.h \
   ../graph/graphStructures.h \
-  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h
+  ../graph/misc.h
 
 CMakeFiles/spo.dir/lang/MyLangLexer.c.o: ../lang/MyLangLexer.c \
   /usr/include/stdc-predef.h \
@@ -850,8 +854,6 @@ CMakeFiles/spo.dir/main.c.o: ../main.c \
 
 ../lang/MyLangLexer.c:
 
-../graph/graphStructures.h:
-
 ../graph/graph.c:
 
 /usr/include/x86_64-linux-gnu/bits/dirent_ext.h:
@@ -859,6 +861,10 @@ CMakeFiles/spo.dir/main.c.o: ../main.c \
 /usr/include/x86_64-linux-gnu/bits/dirent.h:
 
 /usr/include/dirent.h:
+
+../graph/graphStructures.h:
+
+../graph/graph.h:
 
 /usr/local/include/antlr3rewritestreams.h:
 
@@ -883,6 +889,8 @@ CMakeFiles/spo.dir/main.c.o: ../main.c \
 /usr/local/include/antlr3input.h:
 
 /usr/local/include/antlr3collections.h:
+
+../graph/misc.h:
 
 /usr/local/include/antlr3encodings.h:
 

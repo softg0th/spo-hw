@@ -96,12 +96,12 @@ callStatement
     ;
 
 condStatement
-  :  'if' expression 'then' body ('else' body)?
-  -> ^(CondToken ^(ExpressionToken expression) ^(CondToken body) ^(CondToken body)?)
+  :  'if' expression 'then' '{' body '}' ('else' '{' body '}')?
+  -> ^(CondToken ^(ExpressionToken expression) ^(body) ^(body)?)
   ;
 
 loopStatement
-  :  ('while'|'until') expression '{' body '}'  -> ^(LoopToken ^(ExpressionToken expression) ^(LoopToken body))
+  :  ('while'|'until') expression '{' body '}'  -> ^(LoopToken ^(ExpressionToken expression) ^(body))
   ;
 
 returnStatement
@@ -113,7 +113,7 @@ repeatStatement
   ;
 
 breakStatement
-  :  'break' ';'
+  :  'break' ';' -> ^(BreakToken)
   ;
 
 expressionStatement

@@ -6,21 +6,20 @@
 
 #include "graphStructures.h"
 
-#include "misc.h"
-
 int nodeId = 0;
 
 static struct cfgNode **allNodes = NULL;
 static int allNodesCount = 0;
+static int binCounter = 0;
+static struct parseTree* currentParseTree = NULL;
+
+static int parseTreeIdCounter = 100000;
 
 struct breakStack {
     struct cfgNode *breakTarget;
     struct breakStack *next;
 };
 
-// ------------------------------------------------------------------------
-// Utils
-// ------------------------------------------------------------------------
 static char* safeStrdup(const char *s) {
     return s ? strdup(s) : NULL;
 }
@@ -45,9 +44,52 @@ static bool isNodeInList(struct cfgNode *candidate) {
     return false;
 }
 
-// ------------------------------------------------------------------------
-// Создание узлов и функций
-// ------------------------------------------------------------------------
+char* generateBinopName(pANTLR3_BASE_TREE tree) {
+    if (tree == NULL) return NULL;
+
+    char* nodeName = (char*)tree->toString(tree)->chars;
+    if (!nodeName) return NULL;
+
+    const char* binaryOps[] = {
+        "+", "-", "*", "/", "%", "<<", ">>", "&", "^", "|",
+        "="
+    };
+
+    const char* binopNames[] = {
+        "BINOP_ADD", "BINOP_SUB", "BINOP_MUL", "BINOP_DIV", "BINOP_MOD",
+        "BINOP_LSHIFT", "BINOP_RSHIFT", "BINOP_AND", "BINOP_XOR", "BINOP_OR",
+        "BINOP_ASSIGN"
+    };
+
+    size_t opsCount = sizeof(binaryOps) / sizeof(binaryOps[0]);
+
+    for (size_t i = 0; i < opsCount; ++i) {
+        if (strcmp(nodeName, binaryOps[i]) == 0) {
+            return safeStrdup(binopNames[i]);
+        }
+    }
+
+    return NULL;
+}
+
+bool isOperation(pANTLR3_BASE_TREE tree) {
+    if (tree == NULL) return false;
+
+    char* nodeName = (char*)tree->toString(tree)->chars;
+    if (nodeName == NULL) return false;
+
+    const char* binaryOps[] = {
+        "+", "-", "*", "/", "%", "<<", ">>", "&", "^", "|",
+        "="
+    };
+    for (size_t i = 0; i < sizeof(binaryOps) / sizeof(binaryOps[0]); ++i) {
+        if (strcmp(nodeName, binaryOps[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 struct cfgNode* createCfgNode(pANTLR3_BASE_TREE tree) {
     struct cfgNode *node = calloc(1, sizeof(struct cfgNode));
     if (!node) {
@@ -56,11 +98,18 @@ struct cfgNode* createCfgNode(pANTLR3_BASE_TREE tree) {
     }
     node->id = nodeId++;
     node->ast = (struct astNode*)tree;
-    node->isProcessed = false; // Инициализируем как необработанный
+    node->isProcessed = false;
+    node->isParsed = false;
+    if (isOperation(tree)) {
+        node->isOperation = true;
+        char* newName = generateBinopName(tree);
+        node->nodeOp = newName;
+    } else {
+        node->isOperation = false;
+    }
     addNodeToGlobalList(node);
     return node;
 }
-
 
 struct funcNode* processFunction(pANTLR3_BASE_TREE funcTree, char* name) {
     struct funcNode *f = calloc(1, sizeof(struct funcNode));
@@ -75,9 +124,6 @@ struct funcNode* processFunction(pANTLR3_BASE_TREE funcTree, char* name) {
     return f;
 }
 
-// ------------------------------------------------------------------------
-// Работа с break
-// ------------------------------------------------------------------------
 static void pushBreak(struct context *ctx, struct cfgNode *breakTarget) {
     struct breakStack *bs = malloc(sizeof(struct breakStack));
     bs->breakTarget = breakTarget;
@@ -95,22 +141,15 @@ static void popBreak(struct context *ctx) {
     }
 }
 
-// ------------------------------------------------------------------------
-// Проверка узлов (if/while/break) не лезут в строку выражения
-// ------------------------------------------------------------------------
 static bool isControlNode(const char* n) {
     if (!n) return true;
     if (!strcmp(n,"CondToken"))  return true;
     if (!strcmp(n,"LoopToken"))  return true;
     if (!strcmp(n,"BreakToken")) return true;
     if (!strcmp(n,"VarDeclToken")) return true;
-    // ... дополняйте при желании
     return false;
 }
 
-// ------------------------------------------------------------------------
-// Сборка строки выражения (if((expr)), while((expr)))
-// ------------------------------------------------------------------------
 static void getExpressionString(pANTLR3_BASE_TREE tree, char* buf, size_t sz) {
     if (!tree || sz<2) return;
     pANTLR3_STRING s = tree->toString(tree);
@@ -146,10 +185,6 @@ static void getExpressionString(pANTLR3_BASE_TREE tree, char* buf, size_t sz) {
         }
     }
 }
-
-// ------------------------------------------------------------------------
-// processTreeNode + обработчики if/while/break/return
-// ------------------------------------------------------------------------
 
 static void processTreeNode(pANTLR3_BASE_TREE tree, struct context *ctx);
 
@@ -188,11 +223,6 @@ static void processConditional(pANTLR3_BASE_TREE ifTree, struct context *ctx) {
         thenStart->name = safeStrdup("thenBlock");
         ifNode->conditionalBranch = thenStart;
         ctx->curr = thenStart;
-        unsigned tCount = thenBody->getChildCount(thenBody);
-        for (unsigned i = 0; i < tCount; i++) {
-            pANTLR3_BASE_TREE ch = thenBody->getChild(thenBody, i);
-            char* childNodeStr = (char*)ch->toString(ch)->chars;
-        }
         processTreeNode(thenBody, ctx);
         if (ctx->curr && ctx->curr->defaultBranch == NULL) {
             ctx->curr->defaultBranch = endIf;
@@ -201,20 +231,12 @@ static void processConditional(pANTLR3_BASE_TREE ifTree, struct context *ctx) {
         ifNode->conditionalBranch = endIf;
     }
 
-    // --- else-ветка ---
     if (elseBody) {
         struct cfgNode* elseStart = createCfgNode(elseBody);
         elseStart->name = safeStrdup("elseBlock");
         ifNode->defaultBranch = elseStart;
         ctx->curr = elseStart;
-        unsigned eCount = elseBody->getChildCount(elseBody);
-        for (unsigned i = 0; i < eCount; i++) {
-            pANTLR3_BASE_TREE ch = elseBody->getChild(elseBody, i);
-            char* childNodeStr = (char*)ch->toString(ch)->chars;
-        }
-
         processTreeNode(elseBody, ctx);
-
         if (ctx->curr && ctx->curr->defaultBranch==NULL) {
             ctx->curr->defaultBranch = endIf;
         }
@@ -234,7 +256,6 @@ struct cfgNode* findCfgNodeByAST(pANTLR3_BASE_TREE tree) {
     }
     return NULL;
 }
-
 
 static void processLoop(pANTLR3_BASE_TREE loopTree, struct context *ctx) {
     struct cfgNode *loopNode = createCfgNode(loopTree);
@@ -384,10 +405,6 @@ static void processTreeNode(pANTLR3_BASE_TREE tree, struct context *ctx) {
     }
 }
 
-
-// -------------------------------------------------------------
-// resetTraversal, printCFGNode, drawCFG
-// -------------------------------------------------------------
 static void resetTraversal(struct cfgNode *node) {
     if (!node) return;
     if (node->isTraversed) return;
@@ -405,11 +422,38 @@ static void resetTraversal(struct cfgNode *node) {
     node->isTraversed=false;
 }
 
-static void printCFGNode(FILE *f, struct cfgNode *node) {
-    if (!node||node->isTraversed) return;
-    node->isTraversed=true;
+static void printParseSubtree(FILE *f, int parseParentId, struct parseTree *pt) {
+    if (!pt) return;
+    int myId = parseTreeIdCounter++;
+    fprintf(f, "    PT%d [label=\"%s\", shape=ellipse];\n", myId, pt->name);
+    fprintf(f, "    PT%d -> PT%d;\n", parseParentId, myId);
 
-    fprintf(f,"    Node%d [label=\"%s\"];\n",node->id,node->name?node->name:"");
+    if (pt->left)  printParseSubtree(f, myId, pt->left);
+    if (pt->right) printParseSubtree(f, myId, pt->right);
+}
+
+
+static void printOperationSubtree(FILE *f, struct cfgNode *node) {
+    if (!node->parseTree) return;
+
+    int parseRootId = parseTreeIdCounter++;
+    fprintf(f, "    PT%d [label=\"%s\", shape=ellipse, style=dashed];\n",
+            parseRootId, node->parseTree->name ? node->parseTree->name : "op_root");
+    fprintf(f, "    Node%d -> PT%d [label=\"ops\"];\n", node->id, parseRootId);
+
+    if (node->parseTree->left) {
+        printParseSubtree(f, parseRootId, node->parseTree->left);
+    }
+    if (node->parseTree->right) {
+        printParseSubtree(f, parseRootId, node->parseTree->right);
+    }
+}
+
+static void printCFGNode(FILE *f, struct cfgNode *node) {
+    if (!node || node->isTraversed) return;
+    node->isTraversed=true;
+    fprintf(f,"    Node%d [label=\"%s\"];\n", node->id, node->name?node->name:"");
+    printOperationSubtree(f, node);
 
     if (node->conditionalBranch && !isNodeInList(node->conditionalBranch)) {
         node->conditionalBranch=NULL;
@@ -420,8 +464,8 @@ static void printCFGNode(FILE *f, struct cfgNode *node) {
 
     bool isIf=false,isWhile=false;
     if (node->name) {
-        if (!strncmp(node->name,"if ((",4))   isIf=true;
-        else if (!strncmp(node->name,"while ((",7)) isWhile=true;
+        if (!strncmp(node->name,"if ((",4))     isIf=true;
+        else if (!strncmp(node->name,"while ((",6)) isWhile=true;
     }
 
     if (node->conditionalBranch) {
@@ -430,6 +474,7 @@ static void printCFGNode(FILE *f, struct cfgNode *node) {
                 node->id,node->conditionalBranch->id,lab);
         printCFGNode(f,node->conditionalBranch);
     }
+
     if (node->defaultBranch) {
         const char* lab = isIf? "else": (isWhile? "false":"");
         fprintf(f,"    Node%d -> Node%d [label=\"%s\"];\n",
@@ -440,6 +485,7 @@ static void printCFGNode(FILE *f, struct cfgNode *node) {
 
 static void drawCFG(struct programGraph *graph) {
     if (!graph) return;
+
     for (int i=0; i<graph->funcCount; i++) {
         struct funcNode *fn = graph->functions[i];
         if (!fn || !fn->cfgEntry) continue;
@@ -456,18 +502,60 @@ static void drawCFG(struct programGraph *graph) {
         fprintf(fp,"digraph CFG {\n");
         fprintf(fp,"    node [shape=box];\n");
         printCFGNode(fp, fn->cfgEntry);
+
         fprintf(fp,"}\n");
         fclose(fp);
-
         char cmd[512];
         snprintf(cmd,sizeof(cmd),"dot -Tpng %s -o %s.png", fname, fn->identifier);
         system(cmd);
     }
 }
 
-// -------------------------------------------------------------
-// processTree
-// -------------------------------------------------------------
+static void collectNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
+    if (!node) return;
+    if (used[node->id]) return;
+    used[node->id] = true;
+    list[*count] = node;
+    (*count)++;
+    collectNodes(node->conditionalBranch, list, used, count);
+    collectNodes(node->defaultBranch, list, used, count);
+}
+
+static void buildOpTreesForFunc(struct funcNode *fn) {
+    if (!fn || !fn->cfgEntry) return;
+    struct cfgNode *arr[4096];
+    bool used[65536];
+    memset(used, 0, sizeof(used));
+    int cnt = 0;
+    collectNodes(fn->cfgEntry, arr, used, &cnt);
+
+    for (int i = 0; i < cnt; i++) {
+        struct cfgNode *nd = arr[i];
+        if (nd->isOperation) {
+            nd->parseTree = calloc(1, sizeof(struct parseTree));
+            nd->parseTree->name = nd->nodeOp ? strdup(nd->nodeOp) : strdup("op");
+            if ((i+1) < cnt && !arr[i+1]->isOperation) {
+                struct parseTree *lp = calloc(1, sizeof(struct parseTree));
+                lp->name = arr[i+1]->name ? strdup(arr[i+1]->name) : strdup("operand");
+                nd->parseTree->left = lp;
+                i++;
+            }
+            if ((i+1) < cnt && !arr[i+1]->isOperation) {
+                struct parseTree *rp = calloc(1, sizeof(struct parseTree));
+                rp->name = arr[i+1]->name ? strdup(arr[i+1]->name) : strdup("operand");
+                nd->parseTree->right = rp;
+                i++;
+            }
+        }
+    }
+}
+
+void buildOperationTrees(struct programGraph *graph) {
+    if (!graph) return;
+    for (int i = 0; i < graph->funcCount; i++) {
+        buildOpTreesForFunc(graph->functions[i]);
+    }
+}
 
 void processTree(pANTLR3_BASE_TREE tree) {
     struct programGraph *graph = calloc(1, sizeof(struct programGraph));
@@ -508,6 +596,7 @@ void processTree(pANTLR3_BASE_TREE tree) {
             }
         }
     }
+buildOperationTrees(graph);
+drawCFG(graph);
 
-    drawCFG(graph);
 }

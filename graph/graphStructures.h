@@ -3,19 +3,25 @@
 
 #include <stdbool.h>
 
-struct astNode; // Предварительное объявление
-
 struct cfgNode {
     int id;
     char* name;
+    char* nodeOp;
     struct astNode* ast;
     struct cfgNode* conditionalBranch;
     struct cfgNode* defaultBranch;
     bool isTraversed;
     bool isProcessed;
-    struct astNode* parseTree; // Новое поле для дерева разбора
+    bool isParsed;
+    bool isOperation;
+    struct parseTree* parseTree;
 };
 
+struct parseTree {
+    char* name;
+    struct parseTree* left;
+    struct parseTree* right;
+};
 
 struct funcNode {
     char *identifier;

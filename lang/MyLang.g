@@ -25,8 +25,9 @@ tokens {
   RangeToken;
   ArrayToken;
   ArrayTokenSuffix;
-  CallToken;
   ArrayList;
+  CallToken;
+  ExpressionListToken;
 }
 
 source
@@ -34,7 +35,7 @@ source
   ;
 
 sourceItem
-  :  'def' funcSignature 'begin' body 'end' -> ^(FuncDefToken funcSignature body)
+  :  'def' funcSignature body 'end' -> ^(FuncDefToken funcSignature body)
   ;
 
 funcSignature
@@ -50,15 +51,12 @@ arg
   ;
 
 statement
-  :  expression ';'
-  |  loopStatement
+  :  loopStatement
   |  breakStatement
   |  expressionStatement
   |  condStatement
   |  repeatStatement
   |  returnStatement
-  |  assignmentStatement
-  |  callStatement
   |  varDeclaration
   |  arrayType
   ;
@@ -91,10 +89,6 @@ assignmentStatement
     : identifier '=' expression -> ^(AssignmentOp ^(Identifier identifier) expression)
     ;
 
-callStatement
-    : identifier '(' argList ')' -> ^(CallToken ^(Identifier identifier) ^(ArgListToken argList)?)
-    ;
-
 condStatement
   :  'if' expression 'then' '{' body '}' ('else' '{' body '}')?
   -> ^(CondToken ^(ExpressionToken expression) ^(body) ^(body)?)
@@ -121,8 +115,14 @@ expressionStatement
   ;
 
 expression
-  :  assignmentExpression
+  : assignmentExpression
   ;
+
+callExpression
+  : identifier '(' (expressionList)? ')' 
+    -> ^(CallToken ^(Identifier identifier) (expressionList)?)
+  ;
+
 
 slice
 : expression '[' ranges ']' -> ^(SliceToken expression ranges)
@@ -181,12 +181,9 @@ unaryExpression
       |  (UnaryOp^)? primaryExpression
   ;
 
-callExpression
-    : identifier '(' argList ')' -> ^(CallToken identifier ArgListToken)
-    ;
-
 primaryExpression
-  :  '('! assignmentExpression ')'!
+  : callExpression
+  |  '('! assignmentExpression ')'!
   |  Literal
   |  Identifier
   ;
@@ -261,5 +258,6 @@ RelationalOp
 UnaryOp
   :  ('++'|'--'|'+'|'-')
   ;
+
 
 WS  :  (' '|'\r'|'\t'|'\u000C'|'\n') { $channel=HIDDEN; };

@@ -1,24 +1,12 @@
-def sumArray() of int
-begin
-data array[10] array[7] array[9]
-var data of bool
-var name of int = 2
-while name == 2 {
-    var d of int = 10
-    if d == 10 then {
-     var u of bool
-}
-}
-if em == 3 then {
-     var g of bool
-}
-new array[1]
-var t of int = 2
-return data
-end
+def main() of int
+  var i of int
+  var a of int
+  var b of int
+  printf("2");
 
-
-def e() of bool
-begin
-var example of int = 7
+  while(1) {
+    if 11 then {
+      break;
+    }
+  }
 end

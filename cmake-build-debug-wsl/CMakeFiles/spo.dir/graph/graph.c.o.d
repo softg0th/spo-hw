@@ -137,4 +137,4 @@ CMakeFiles/spo.dir/graph/graph.c.o: /home/antlr/graph/graph.c \
  /usr/local/include/antlr3treeparser.h \
  /usr/local/include/antlr3filestream.h \
  /usr/local/include/antlr3rewritestreams.h \
- /home/antlr/graph/graphStructures.h /home/antlr/graph/misc.h
+ /home/antlr/graph/graphStructures.h

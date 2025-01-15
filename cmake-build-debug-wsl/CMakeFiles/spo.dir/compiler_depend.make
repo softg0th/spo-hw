@@ -340,8 +340,7 @@ CMakeFiles/spo.dir/graph/graph.c.o: ../graph/graph.c \
   /usr/local/include/antlr3treeparser.h \
   /usr/local/include/antlr3filestream.h \
   /usr/local/include/antlr3rewritestreams.h \
-  ../graph/graphStructures.h \
-  ../graph/misc.h
+  ../graph/graphStructures.h
 
 CMakeFiles/spo.dir/lang/MyLangLexer.c.o: ../lang/MyLangLexer.c \
   /usr/include/stdc-predef.h \
@@ -889,8 +888,6 @@ CMakeFiles/spo.dir/main.c.o: ../main.c \
 /usr/local/include/antlr3input.h:
 
 /usr/local/include/antlr3collections.h:
-
-../graph/misc.h:
 
 /usr/local/include/antlr3encodings.h:
 

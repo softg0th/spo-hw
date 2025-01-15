@@ -60,6 +60,25 @@ pANTLR3_BASE_TREE rebuildTree(pANTLR3_BASE_TREE tree) {
     return tree;
 }
 
+pANTLR3_BASE_TREE removeSemicolon(pANTLR3_BASE_TREE tree) {
+    if (tree == NULL) {
+        return NULL;
+    }
+    unsigned int childCount = tree->getChildCount(tree);
+    for (int i = childCount - 1; i >= 0; --i) {
+        pANTLR3_BASE_TREE child = (pANTLR3_BASE_TREE)tree->getChild(tree, i);
+        if (child == NULL) {
+            continue;
+        }
+        char* childText = (char*)child->toString(child)->chars;
+        if (strcmp(childText, ";") == 0) {
+            tree->deleteChild(tree, i);
+        } else {
+            removeSemicolon(child);
+        }
+    }
+    return tree;
+}
 
 void drawTree(const pMyLangParser parser, pANTLR3_BASE_TREE tree) {
     rebuildTree(tree);
@@ -97,6 +116,7 @@ void makeTree(char *content, char *filename) {
     }
 
     pANTLR3_BASE_TREE ast = r.tree;
+    ast = removeSemicolon(ast);
     drawTree(parser, ast);
     processTree(ast);
     parser->free(parser);

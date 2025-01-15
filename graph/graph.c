@@ -360,6 +360,10 @@ static void processGenericNode(pANTLR3_BASE_TREE tree, struct context *ctx) {
     pANTLR3_STRING s = tree->toString(tree);
     const char* nm = (s && s->chars) ? s->chars : "";
 
+    if (strcmp(nm,  ";") == 0) {
+        printf("true\n");
+    }
+    
     if (isTrivialNode(nm)) {
         unsigned cc = tree->getChildCount(tree);
         for (unsigned i=0; i<cc; i++) {
@@ -452,6 +456,7 @@ static void printOperationSubtree(FILE *f, struct cfgNode *node) {
 static void printCFGNode(FILE *f, struct cfgNode *node) {
     if (!node || node->isTraversed) return;
     node->isTraversed=true;
+    sanitizeString(node->name, '\"');
     fprintf(f,"    Node%d [label=\"%s\"];\n", node->id, node->name?node->name:"");
     printOperationSubtree(f, node);
 
@@ -483,13 +488,25 @@ static void printCFGNode(FILE *f, struct cfgNode *node) {
     }
 }
 
+void sanitizeString(char *str, char value) {
+    int i = 0, j = 0;
+    
+    while (str[i] != '\0') {
+        if (str[i] != value) {
+            str[j++] = str[i];
+        }
+        i++;
+    }
+    
+    str[j] = '\0';
+}
+
 static void drawCFG(struct programGraph *graph) {
     if (!graph) return;
 
     for (int i=0; i<graph->funcCount; i++) {
         struct funcNode *fn = graph->functions[i];
         if (!fn || !fn->cfgEntry) continue;
-
         char fname[256];
         snprintf(fname,sizeof(fname),"%s.dot", fn->identifier);
         FILE *fp = fopen(fname,"w");

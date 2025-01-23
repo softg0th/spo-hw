@@ -167,13 +167,10 @@ CMakeFiles/spo.dir/ast/ast.c.o: ../ast/ast.c \
   /usr/local/include/antlr3filestream.h \
   /usr/local/include/antlr3rewritestreams.h \
   ../lang/MyLangParser.h \
-  ../graph/graph.h \
-  ../graph/graphStructures.h \
-  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
-  ../graph/graphStructures.h \
   /usr/include/dirent.h \
   /usr/include/x86_64-linux-gnu/bits/dirent.h \
-  /usr/include/x86_64-linux-gnu/bits/dirent_ext.h
+  /usr/include/x86_64-linux-gnu/bits/dirent_ext.h \
+  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h
 
 CMakeFiles/spo.dir/graph/graph.c.o: ../graph/graph.c \
   /usr/include/stdc-predef.h \
@@ -844,14 +841,22 @@ CMakeFiles/spo.dir/main.c.o: ../main.c \
   /usr/include/x86_64-linux-gnu/bits/dirent_ext.h \
   ../ast/ast.h \
   ../lang/MyLangLexer.h \
-  ../lang/MyLangParser.h
+  ../lang/MyLangParser.h \
+  ../graph/graph.h \
+  ../graph/graphStructures.h \
+  /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
+  ../graph/graphStructures.h
 
+
+../graph/graph.h:
 
 ../ast/ast.h:
 
 ../lang/MyLangParser.c:
 
 ../lang/MyLangLexer.c:
+
+../graph/graphStructures.h:
 
 ../graph/graph.c:
 
@@ -860,10 +865,6 @@ CMakeFiles/spo.dir/main.c.o: ../main.c \
 /usr/include/x86_64-linux-gnu/bits/dirent.h:
 
 /usr/include/dirent.h:
-
-../graph/graphStructures.h:
-
-../graph/graph.h:
 
 /usr/local/include/antlr3rewritestreams.h:
 

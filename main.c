@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ast/ast.h"
+#include "graph/graph.h"
+#include "graph/graphStructures.h"
 
 int main(void)
 {
@@ -39,7 +41,8 @@ int main(void)
         }
         strcat(content, line);
     }
-    makeTree(content, filename);
+    pANTLR3_BASE_TREE *tree = makeTree(content, filename);
+    struct programGraph graph = processTree(tree);
     fclose(file);
     return 0;
 }

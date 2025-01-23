@@ -137,9 +137,7 @@ CMakeFiles/spo.dir/ast/ast.c.o: /home/antlr/ast/ast.c \
  /usr/local/include/antlr3treeparser.h \
  /usr/local/include/antlr3filestream.h \
  /usr/local/include/antlr3rewritestreams.h \
- /home/antlr/ast/../lang/MyLangParser.h /home/antlr/ast/../graph/graph.h \
- /home/antlr/ast/../graph/graphStructures.h \
- /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
- /home/antlr/ast/../graph/graphStructures.h /usr/include/dirent.h \
+ /home/antlr/ast/../lang/MyLangParser.h /usr/include/dirent.h \
  /usr/include/x86_64-linux-gnu/bits/dirent.h \
- /usr/include/x86_64-linux-gnu/bits/dirent_ext.h
+ /usr/include/x86_64-linux-gnu/bits/dirent_ext.h \
+ /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h

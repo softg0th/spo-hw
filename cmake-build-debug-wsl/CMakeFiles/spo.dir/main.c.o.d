@@ -140,4 +140,7 @@ CMakeFiles/spo.dir/main.c.o: /home/antlr/main.c \
  /usr/include/x86_64-linux-gnu/bits/dirent.h \
  /usr/include/x86_64-linux-gnu/bits/dirent_ext.h /home/antlr/ast/ast.h \
  /home/antlr/ast/../lang/MyLangLexer.h \
- /home/antlr/ast/../lang/MyLangParser.h
+ /home/antlr/ast/../lang/MyLangParser.h /home/antlr/graph/graph.h \
+ /home/antlr/graph/graphStructures.h \
+ /usr/lib/gcc/x86_64-linux-gnu/11/include/stdbool.h \
+ /home/antlr/graph/graphStructures.h

@@ -2,8 +2,6 @@
 
 #include "../lang/MyLangLexer.h"
 #include "../lang/MyLangParser.h"
-#include "../graph/graph.h"
-#include "../graph/graphStructures.h"
 #include <antlr3.h>
 #include <dirent.h>
 #include <stdio.h>
@@ -98,7 +96,7 @@ void drawTree(const pMyLangParser parser, pANTLR3_BASE_TREE tree) {
     }
 }
 
-void makeTree(char *content, char *filename) {
+pANTLR3_BASE_TREE makeTree(char *content, char *filename) {
     const pANTLR3_UINT8 input_string = (pANTLR3_UINT8) content;
 
     const pANTLR3_INPUT_STREAM input = antlr3StringStreamNew(input_string, ANTLR3_ENC_8BIT,
@@ -118,9 +116,11 @@ void makeTree(char *content, char *filename) {
     pANTLR3_BASE_TREE ast = r.tree;
     ast = removeSemicolon(ast);
     drawTree(parser, ast);
-    processTree(ast);
+    /*
     parser->free(parser);
     tokens->free(tokens);
     lex->free(lex);
     input->close(input);
+    */
+    return ast;  
 }

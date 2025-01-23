@@ -8,4 +8,4 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void makeTree(char *content, char *filename);
+pANTLR3_BASE_TREE makeTree(char *content, char *filename);

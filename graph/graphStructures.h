@@ -13,7 +13,8 @@ struct cfgNode {
     bool isTraversed;
     bool isProcessed;
     bool isParsed;
-    bool isOperation;
+    bool isParseTreeRoot;
+    int parseTreeHeight;
     struct parseTree* parseTree;
 };
 

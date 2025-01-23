@@ -1,12 +1,4 @@
 def main() of int
-  var i of int
-  var a of int
-  var b of int
-  printf("2");
 
-  while(1) {
-    if 11 then {
-      break;
-    }
-  }
+  var aee = 9 - 12 + 14 - 20 + 30
 end

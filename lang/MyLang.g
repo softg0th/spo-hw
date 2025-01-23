@@ -193,7 +193,7 @@ expressionList
   ;
 
 varDeclaration
-  : 'var' identifier ('of' typeRef)? ('=' expression)? -> ^(VarDeclToken identifier typeRef? expression?)
+  : 'var' identifier ('=' expression) -> ^(VarDeclToken identifier expression)
   ;
 
 

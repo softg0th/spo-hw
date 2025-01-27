@@ -1,4 +1,11 @@
 def main() of int
 
   var aee = 9 - 12 + 14 - 20 + 30
+  while name == 2 {
+   
+    if d == 10 then {
+     var u = false
+}
+}
+
 end

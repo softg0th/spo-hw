@@ -41,6 +41,24 @@ digraph CFG {
     Node12 [label="20"];
     Node12 -> Node13 [label=""];
     Node13 [label="30"];
-    Node13 -> Node1 [label=""];
+    Node13 -> Node14 [label=""];
+    Node14 [label="while (((name==2)))"];
+    Node14 -> Node16 [label="true"];
+    Node16 [label="while_body"];
+    Node16 -> Node17 [label=""];
+    Node17 [label="if (((d==10)))"];
+    Node17 -> Node19 [label="then"];
+    Node19 [label="thenBlock"];
+    Node19 -> Node20 [label=""];
+    Node20 [label="u"];
+    Node20 -> Node21 [label=""];
+    Node21 [label="false"];
+    Node21 -> Node18 [label=""];
+    Node18 [label="endif"];
+    Node18 -> Node14 [label=""];
+    Node17 -> Node18 [label="else"];
+    Node14 -> Node15 [label="false"];
+    Node15 [label="loop_exit"];
+    Node15 -> Node1 [label=""];
     Node1 [label="func_exit"];
 }

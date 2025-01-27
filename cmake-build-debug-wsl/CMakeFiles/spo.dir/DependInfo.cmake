@@ -13,6 +13,8 @@ set(CMAKE_DEPENDS_DEPENDENCY_FILES
   "/home/antlr/lang/MyLangLexer.c" "CMakeFiles/spo.dir/lang/MyLangLexer.c.o" "gcc" "CMakeFiles/spo.dir/lang/MyLangLexer.c.o.d"
   "/home/antlr/lang/MyLangParser.c" "CMakeFiles/spo.dir/lang/MyLangParser.c.o" "gcc" "CMakeFiles/spo.dir/lang/MyLangParser.c.o.d"
   "/home/antlr/main.c" "CMakeFiles/spo.dir/main.c.o" "gcc" "CMakeFiles/spo.dir/main.c.o.d"
+  "/home/antlr/types/typization.c" "CMakeFiles/spo.dir/types/typization.c.o" "gcc" "CMakeFiles/spo.dir/types/typization.c.o.d"
+  "/home/antlr/types/utils.c" "CMakeFiles/spo.dir/types/utils.c.o" "gcc" "CMakeFiles/spo.dir/types/utils.c.o.d"
   )
 
 # Targets to which this target links.

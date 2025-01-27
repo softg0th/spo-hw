@@ -81,12 +81,12 @@ clean: CMakeFiles/spo.dir/clean
 CMakeFiles/spo.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/antlr/cmake-build-debug-wsl/CMakeFiles --progress-num=1,2,3,4,5,6 "Built target spo"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/antlr/cmake-build-debug-wsl/CMakeFiles --progress-num=1,2,3,4,5,6,7,8 "Built target spo"
 .PHONY : CMakeFiles/spo.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/spo.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/antlr/cmake-build-debug-wsl/CMakeFiles 6
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/antlr/cmake-build-debug-wsl/CMakeFiles 8
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/spo.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/antlr/cmake-build-debug-wsl/CMakeFiles 0
 .PHONY : CMakeFiles/spo.dir/rule

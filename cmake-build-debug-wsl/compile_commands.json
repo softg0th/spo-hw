@@ -23,5 +23,15 @@
   "directory": "/home/antlr/cmake-build-debug-wsl",
   "command": "/usr/bin/cc   -g -std=gnu11 -o CMakeFiles/spo.dir/graph/graph.c.o -c /home/antlr/graph/graph.c",
   "file": "/home/antlr/graph/graph.c"
+},
+{
+  "directory": "/home/antlr/cmake-build-debug-wsl",
+  "command": "/usr/bin/cc   -g -std=gnu11 -o CMakeFiles/spo.dir/types/typization.c.o -c /home/antlr/types/typization.c",
+  "file": "/home/antlr/types/typization.c"
+},
+{
+  "directory": "/home/antlr/cmake-build-debug-wsl",
+  "command": "/usr/bin/cc   -g -std=gnu11 -o CMakeFiles/spo.dir/types/utils.c.o -c /home/antlr/types/utils.c",
+  "file": "/home/antlr/types/utils.c"
 }
 ]

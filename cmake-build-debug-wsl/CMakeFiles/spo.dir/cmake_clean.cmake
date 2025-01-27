@@ -9,6 +9,10 @@ file(REMOVE_RECURSE
   "CMakeFiles/spo.dir/lang/MyLangParser.c.o.d"
   "CMakeFiles/spo.dir/main.c.o"
   "CMakeFiles/spo.dir/main.c.o.d"
+  "CMakeFiles/spo.dir/types/typization.c.o"
+  "CMakeFiles/spo.dir/types/typization.c.o.d"
+  "CMakeFiles/spo.dir/types/utils.c.o"
+  "CMakeFiles/spo.dir/types/utils.c.o.d"
   "spo"
   "spo.pdb"
 )

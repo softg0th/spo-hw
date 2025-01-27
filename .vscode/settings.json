@@ -9,6 +9,7 @@
       "typeinfo": "c",
       "string.h": "c",
       "antlr3.h": "c",
-      "mylangparser.h": "c"
+      "mylangparser.h": "c",
+      "graph.h": "c"
     }
   }  

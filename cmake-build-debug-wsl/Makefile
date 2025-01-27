@@ -249,6 +249,54 @@ main.c.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/main.c.s
 .PHONY : main.c.s
 
+types/typization.o: types/typization.c.o
+.PHONY : types/typization.o
+
+# target to build an object file
+types/typization.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/types/typization.c.o
+.PHONY : types/typization.c.o
+
+types/typization.i: types/typization.c.i
+.PHONY : types/typization.i
+
+# target to preprocess a source file
+types/typization.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/types/typization.c.i
+.PHONY : types/typization.c.i
+
+types/typization.s: types/typization.c.s
+.PHONY : types/typization.s
+
+# target to generate assembly for a file
+types/typization.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/types/typization.c.s
+.PHONY : types/typization.c.s
+
+types/utils.o: types/utils.c.o
+.PHONY : types/utils.o
+
+# target to build an object file
+types/utils.c.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/types/utils.c.o
+.PHONY : types/utils.c.o
+
+types/utils.i: types/utils.c.i
+.PHONY : types/utils.i
+
+# target to preprocess a source file
+types/utils.c.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/types/utils.c.i
+.PHONY : types/utils.c.i
+
+types/utils.s: types/utils.c.s
+.PHONY : types/utils.s
+
+# target to generate assembly for a file
+types/utils.c.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/spo.dir/build.make CMakeFiles/spo.dir/types/utils.c.s
+.PHONY : types/utils.c.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -273,6 +321,12 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... types/typization.o"
+	@echo "... types/typization.i"
+	@echo "... types/typization.s"
+	@echo "... types/utils.o"
+	@echo "... types/utils.i"
+	@echo "... types/utils.s"
 .PHONY : help
 
 

@@ -1,3 +1,0 @@
-/home/antlr/cmake-build-debug-wsl/CMakeFiles/spo.dir
-/home/antlr/cmake-build-debug-wsl/CMakeFiles/edit_cache.dir
-/home/antlr/cmake-build-debug-wsl/CMakeFiles/rebuild_cache.dir

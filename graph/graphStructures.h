@@ -22,7 +22,6 @@ struct parseTree {
     char* name;
     struct parseTree* left;
     struct parseTree* right;
-    bool* visited;
 };
 
 struct funcNode {

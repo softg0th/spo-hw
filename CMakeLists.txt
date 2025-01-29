@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(spo C)
+#include_directories(/opt/homebrew/Cellar/libantlr3c/3.5.3/include/)
+#link_directories(/opt/homebrew/Cellar/libantlr3c/3.5.3/lib)
 
 set(CMAKE_C_STANDARD 11)
 # add_executable(spo main.c Variant3Lexer.c Variant3Parser.c MyLangLexer.c MyLangParser.c)

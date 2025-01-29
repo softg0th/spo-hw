@@ -457,7 +457,7 @@ static void printOperationSubtree(FILE *f, struct cfgNode *node) {
     }
 }
 
-/*
+
 void sanitizeString(char *str, char value) {
     int i = 0, j = 0;
 
@@ -470,13 +470,12 @@ void sanitizeString(char *str, char value) {
 
     str[j] = '\0';
 }
-*/
 
 static void printCFGNode(FILE *f, struct cfgNode *node) {
     if (!node || node->isTraversed) return;
     node->isTraversed=true;
     printf("aee");
-    //sanitizeString(node->name, '\"');
+    sanitizeString(node->name, '\"');
     fprintf(f,"    Node%d [label=\"%s\"];\n", node->id, node->name?node->name:"");
     printOperationSubtree(f, node);
 

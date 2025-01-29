@@ -110,7 +110,7 @@ pANTLR3_BASE_TREE makeTree(char *content, char *filename) {
         tokens->free(tokens);
         lex->free(lex);
         input->close(input);
-        return;
+        return NULL;
     }
 
     pANTLR3_BASE_TREE ast = r.tree;

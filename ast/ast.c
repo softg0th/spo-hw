@@ -14,6 +14,26 @@ pANTLR3_BASE_TREE sourceNode = NULL;
 pANTLR3_BASE_TREE lastArraySuffixNode = NULL;
 int counter = 0;
 
+/*
+bool isOperation(pANTLR3_BASE_TREE tree) {
+    if (tree == NULL) return false;
+
+    char* nodeName = (char*)tree->toString(tree)->chars;
+    if (nodeName == NULL) return false;
+
+    const char* binaryOps[] = {
+        "*", "/", "%", "<<", ">>", "&", "^", "|",
+        "="
+    };
+    for (size_t i = 0; i < sizeof(binaryOps) / sizeof(binaryOps[0]); ++i) {
+        if (strcmp(nodeName, binaryOps[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+*/
+
 pANTLR3_BASE_TREE rebuildTree(pANTLR3_BASE_TREE tree) {
     if (tree == NULL) {
         return NULL;
@@ -86,7 +106,7 @@ void drawTree(const pMyLangParser parser, pANTLR3_BASE_TREE tree) {
         perror("Could not open file for writing");
         return;
     }
-    //fprintf(file, "%s", output->chars);
+    fprintf(file, "%s", output->chars);
     fclose(file);
 
     const char *generateTree = "dot -Tpng tree.dot -o output.png";
@@ -122,5 +142,5 @@ pANTLR3_BASE_TREE makeTree(char *content, char *filename) {
     lex->free(lex);
     input->close(input);
     */
-    return ast;  
+    return ast;
 }

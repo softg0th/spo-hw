@@ -165,15 +165,11 @@ relationalExpression
   ;
 
 shiftExpression
-  :  additiveExpression (('<<'|'>>')^ additiveExpression)*
+  : arithmeticExpression (('<<'|'>>')^ arithmeticExpression)*
   ;
 
-additiveExpression
-  :  multiplicativeExpression (('+'|'-')^ multiplicativeExpression)*
-  ;
-
-multiplicativeExpression
-  :  unaryExpression (('*'|'/'|'%')^ unaryExpression)*
+arithmeticExpression
+  : unaryExpression (('+'|'-'|'*'|'/'|'%')^ unaryExpression)*
   ;
 
 unaryExpression

@@ -113,7 +113,7 @@ struct cfgNode* createCfgNode(pANTLR3_BASE_TREE tree) {
         node->nodeOp = NULL;
     }
     tempParentNode = node;
-    
+
     addNodeToGlobalList(node);
     return node;
 }
@@ -688,6 +688,7 @@ void postProcessGraphTreesFunc(struct funcNode *fn) {
 }
 
 char* getLastParseTreeElement(struct parseTree *pt) {
+    printf("%s\n", pt->name);
     struct parseTree* tree= malloc(sizeof(struct parseTree));
     struct parseTree* newTree= malloc(sizeof(struct parseTree));
     newTree = pt->right;

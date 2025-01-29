@@ -1,4 +1,4 @@
-#include "../graph/graph.c"
+#include "../graph/graph.h"
 //#include "utils.c"
 
 #include <stdio.h>
@@ -23,7 +23,7 @@ bool isFloat(char *str) {
     return *endptr == '\0';
 }
 
-const char* detectType(char *value) {
+char* detectType(char *value) {
     if (isInteger(value)) {
         return "integer";
     } else if (isFloat(value)) {
@@ -59,7 +59,7 @@ bool isPrimaryProcessParseTreeSucceed(struct parseTree *parseTree){
 void processReservedOP(struct cfgNode *node) {
     if (strcmp(node->name, "OP_ASSIGN") == 0) {
         bool test = isPrimaryProcessParseTreeSucceed(node->parseTree);
-        if (isPrimaryProcessParseTreeSucceed) {
+        if (test) {
             printf("current op type: %s\n", currentOpPseudoType);
         }
     } else {
@@ -79,7 +79,8 @@ void processGraphFunc(struct funcNode *fn) {
     while (i < cnt) {
         struct cfgNode *nd = arr[i];
         if (nd->isParseTreeRoot) {
-
+            processReservedOP(nd);
+            i++;
         }
     }
 

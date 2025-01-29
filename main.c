@@ -8,6 +8,7 @@
 #include "ast/ast.h"
 #include "graph/graph.h"
 #include "graph/graphStructures.h"
+#include "types/typization.h"
 
 int main(void)
 {
@@ -42,7 +43,8 @@ int main(void)
         strcat(content, line);
     }
     pANTLR3_BASE_TREE *tree = makeTree(content, filename);
-    struct programGraph graph = processTree(tree);
+    struct programGraph* graph = processTree(tree);
+    processGraphToBuild(graph);
     fclose(file);
     return 0;
 }

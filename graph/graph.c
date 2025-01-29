@@ -474,7 +474,6 @@ void sanitizeString(char *str, char value) {
 static void printCFGNode(FILE *f, struct cfgNode *node) {
     if (!node || node->isTraversed) return;
     node->isTraversed=true;
-    printf("aee");
     sanitizeString(node->name, '\"');
     fprintf(f,"    Node%d [label=\"%s\"];\n", node->id, node->name?node->name:"");
     printOperationSubtree(f, node);
@@ -534,7 +533,7 @@ static void drawCFG(struct programGraph *graph) {
     }
 }
 
-static void collectNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
+void collectNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
     if (!node) return;
     if (used[node->id]) return;
     used[node->id] = true;
@@ -688,7 +687,6 @@ void postProcessGraphTreesFunc(struct funcNode *fn) {
 }
 
 char* getLastParseTreeElement(struct parseTree *pt) {
-    printf("%s\n", pt->name);
     struct parseTree* tree= malloc(sizeof(struct parseTree));
     struct parseTree* newTree= malloc(sizeof(struct parseTree));
     newTree = pt->right;
@@ -748,7 +746,7 @@ void postProcessGraphTrees(struct programGraph *graph) {
     }
 }
 
-struct programGraph processTree(pANTLR3_BASE_TREE tree) {
+struct programGraph* processTree(pANTLR3_BASE_TREE tree) {
     struct programGraph *graph = calloc(1, sizeof(struct programGraph));
     unsigned topCount = tree->getChildCount(tree);
 
@@ -792,4 +790,5 @@ struct programGraph processTree(pANTLR3_BASE_TREE tree) {
     clearGraph(graph);
     postProcessGraphTrees(graph);
     drawCFG(graph);
+    return graph;
 }

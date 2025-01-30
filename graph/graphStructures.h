@@ -45,11 +45,17 @@ struct context {
     int loopDepth;
     struct breakStack *breakStack;
     struct funcNode *function;
+    struct errorList *errors;
 };
 
 struct programGraph {
     struct funcNode **functions;
     int funcCount;
+};
+
+struct errorList {
+    char *message;
+    struct cfgErrorList *next;
 };
 
 #endif

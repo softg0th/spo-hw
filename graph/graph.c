@@ -24,6 +24,53 @@ static char* safeStrdup(const char *s) {
     return s ? strdup(s) : NULL;
 }
 
+static void addError(struct errorList **elist, const char *msg)
+{
+    if (!elist || !msg) return;
+
+    struct errorList *node = malloc(sizeof(struct errorList));
+    if (!node) return;
+
+    node->message = strdup(msg);
+    node->next = NULL;
+
+    if (*elist == NULL) {
+        *elist = node;
+    } else {
+        struct errorList *cur = *elist;
+        while (cur->next) {
+            cur = cur->next;
+        }
+        cur->next = node;
+    }
+}
+
+static void printErrors(const struct errorList *elist)
+{
+    if (!elist) return;
+    fprintf(stdout, "\n==== Detected Errors ====\n");
+    int idx = 1;
+    for (const struct errorList *cur = elist; cur; cur = cur->next) {
+        fprintf(stdout, "%d) %s\n", idx++, cur->message);
+    }
+    fprintf(stdout, "=========================\n");
+}
+
+static void freeErrors(struct errorList **elist)
+{
+    if (!elist || !*elist) return;
+
+    struct errorList *cur = *elist;
+    while (cur) {
+        struct errorList *tmp = cur;
+        cur = cur->next;
+        free(tmp->message);
+        free(tmp);
+    }
+    *elist = NULL;
+}
+
+
 static void addNodeToGlobalList(struct cfgNode *node) {
     struct cfgNode **tmp = realloc(allNodes, sizeof(struct cfgNode*)*(allNodesCount+1));
     if (!tmp) {
@@ -348,7 +395,6 @@ static void processRepeat(pANTLR3_BASE_TREE repeatTree, struct context *ctx)
     loopExit->name = safeStrdup("repeat_until_exit");
     pushBreak(ctx, loopExit);
     if (bodyChild) {
-        // Здесь условие пока не проверяем
         repeatNode->conditionalBranch = NULL;
         struct cfgNode *bodyStart = createCfgNode(bodyChild);
         bodyStart->name = safeStrdup("repeat_body");
@@ -368,17 +414,16 @@ static void processRepeat(pANTLR3_BASE_TREE repeatTree, struct context *ctx)
 static void processBreak(pANTLR3_BASE_TREE bkTree, struct context *ctx) {
     struct cfgNode *bkNode = createCfgNode(bkTree);
     bkNode->name = safeStrdup("break");
-    if (ctx->curr) {
-        ctx->curr->defaultBranch = bkNode;
-    }
+
     struct cfgNode* exitNode = topBreak(ctx);
     if (exitNode) {
         bkNode->defaultBranch = exitNode;
     } else {
-        fprintf(stderr,"Warning: break outside loop\n");
+        addError(&ctx->errors, "Error: break outside of any loop");
     }
     ctx->curr = bkNode;
 }
+
 
 static void processReturn(pANTLR3_BASE_TREE retTree, struct context *ctx) {
     struct cfgNode* r = createCfgNode(retTree);
@@ -834,7 +879,8 @@ struct programGraph* processTree(pANTLR3_BASE_TREE tree) {
                 pANTLR3_BASE_TREE st = child->getChild(child, j);
                 processTreeNode(st, &ctx);
             }
-
+            printErrors(ctx.errors);
+            freeErrors(&ctx.errors);
             if (ctx.curr && ctx.curr != func->cfgExit && ctx.curr->defaultBranch == NULL) {
                 ctx.curr->defaultBranch = func->cfgExit;
             }

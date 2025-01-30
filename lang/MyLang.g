@@ -103,8 +103,10 @@ returnStatement
   ;
 
 repeatStatement
-  :  'repeat' '{' body '}' ('while'|'until') expression -> ^(RepeatToken ^(RepeatToken body) ^(ExpressionToken expression))
+  : 'repeat' '{' body '}' ('while'|'until') expression
+    -> ^(RepeatToken body ^(ExpressionToken expression))
   ;
+
 
 breakStatement
   :  'break' ';' -> ^(BreakToken)
@@ -189,7 +191,7 @@ expressionList
   ;
 
 varDeclaration
-  : 'var' identifier ('=' expression) -> ^(VarDeclToken identifier expression)
+  : 'var' identifier ('of' typeRef)? ('=' expression)? -> ^(VarDeclToken identifier expression)
   ;
 
 

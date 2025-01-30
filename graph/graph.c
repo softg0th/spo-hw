@@ -153,6 +153,7 @@ static bool isControlNode(const char* n) {
     if (!n) return true;
     if (!strcmp(n,"CondToken"))  return true;
     if (!strcmp(n,"LoopToken"))  return true;
+    if (!strcmp(n,"RepeatToken")) return true;
     if (!strcmp(n,"BreakToken")) return true;
     if (!strcmp(n,"VarDeclToken")) return true;
     return false;
@@ -313,6 +314,57 @@ static void processLoop(pANTLR3_BASE_TREE loopTree, struct context *ctx) {
     popBreak(ctx);
 }
 
+static void processRepeat(pANTLR3_BASE_TREE repeatTree, struct context *ctx)
+{
+    struct cfgNode *repeatNode = createCfgNode(repeatTree);
+
+    char exprBuf[256];
+    exprBuf[0] = '\0';
+    unsigned cc = repeatTree->getChildCount(repeatTree);
+    pANTLR3_BASE_TREE bodyChild = NULL;
+    pANTLR3_BASE_TREE exprChild = NULL;
+
+    if (cc > 0) {
+        bodyChild = repeatTree->getChild(repeatTree, 0);
+    }
+    if (cc > 1) {
+        exprChild = repeatTree->getChild(repeatTree, 1);
+    }
+    if (exprChild) {
+        getExpressionString(exprChild, exprBuf, sizeof(exprBuf));
+    }
+    if (exprBuf[0]) {
+        char tmp[300];
+        snprintf(tmp, sizeof(tmp), "repeat { ... } until ((%s))", exprBuf);
+        repeatNode->name = safeStrdup(tmp);
+    } else {
+        repeatNode->name = safeStrdup("repeat { ... } until (?)");
+    }
+    if (ctx->curr) {
+        ctx->curr->defaultBranch = repeatNode;
+    }
+    ctx->curr = repeatNode;
+    struct cfgNode *loopExit = createCfgNode(NULL);
+    loopExit->name = safeStrdup("repeat_until_exit");
+    pushBreak(ctx, loopExit);
+    if (bodyChild) {
+        // Здесь условие пока не проверяем
+        repeatNode->conditionalBranch = NULL;
+        struct cfgNode *bodyStart = createCfgNode(bodyChild);
+        bodyStart->name = safeStrdup("repeat_body");
+        repeatNode->defaultBranch = bodyStart;
+        ctx->curr = bodyStart;
+        processTreeNode(bodyChild, ctx);
+        if (ctx->curr && ctx->curr->defaultBranch == NULL) {
+            ctx->curr->defaultBranch = repeatNode;
+        }
+    }
+    repeatNode->conditionalBranch = loopExit;
+    ctx->curr = loopExit;
+    popBreak(ctx);
+}
+
+
 static void processBreak(pANTLR3_BASE_TREE bkTree, struct context *ctx) {
     struct cfgNode *bkNode = createCfgNode(bkTree);
     bkNode->name = safeStrdup("break");
@@ -401,6 +453,9 @@ static void processTreeNode(pANTLR3_BASE_TREE tree, struct context *ctx) {
     }
     else if (!strcmp(nm, "LoopToken")) {
         processLoop(tree, ctx);
+    }
+    else if (!strcmp(nm, "RepeatToken")) {
+        processRepeat(tree, ctx);
     }
     else if (!strcmp(nm, "BreakToken")) {
         processBreak(tree, ctx);

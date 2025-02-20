@@ -1,37 +1,7 @@
-#include "../graph/graph.h"
-//#include "utils.c"
+#include "../graph/graphForExternal.h"
+#include "utils.h"
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <ctype.h>
-#include <string.h>
-#include <stdbool.h>
-
-bool isInteger(char *str) {
-    if (*str == '\0') return false;
-
-    while (*str) {
-        if (!isdigit(*str)) return false;
-        str++;
-    }
-    return true;
-}
-
-bool isFloat(char *str) {
-    char *endptr;
-    strtod(str, &endptr);
-    return *endptr == '\0';
-}
-
-char* detectType(char *value) {
-    if (isInteger(value)) {
-        return "integer";
-    } else if (isFloat(value)) {
-        return "float";
-    } else {
-        return "unknown";
-    }
-}
 
 char* currentOpPseudoType = NULL;
 
@@ -39,16 +9,19 @@ bool isPrimaryProcessParseTreeSucceed(struct parseTree *parseTree){
     if (!(parseTree->left) || !(parseTree->right)) {
         return parseTree->name;
     }
-    if (strcmp(parseTree->name, "op")) {
+    if (strcmp(parseTree->name, "op") == 0) {
         isPrimaryProcessParseTreeSucceed(parseTree->right);
     } else {
         if (currentOpPseudoType == NULL) {
             currentOpPseudoType = detectType(parseTree -> name);
             if (strcmp(currentOpPseudoType, "unknown") == 0) {
+                printf("Unknown type %s\n", parseTree->name);
                 return false;
             }
         } else {
-            if (strcmp(currentOpPseudoType, detectType(parseTree->name) != 0)) {
+            char* opName = detectType(parseTree->name);
+            if (strcmp(currentOpPseudoType, opName) != 0) {
+                printf("Unknown type %s\n", parseTree->name);
                 return false;
             }
         }
@@ -80,8 +53,8 @@ void processGraphFunc(struct funcNode *fn) {
         struct cfgNode *nd = arr[i];
         if (nd->isParseTreeRoot) {
             processReservedOP(nd);
-            i++;
         }
+        i++;
     }
 
 }

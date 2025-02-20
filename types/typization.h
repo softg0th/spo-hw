@@ -1,4 +1,4 @@
-#include "../graph/graph.h"
+#include "../graph/graphForExternal.h"
 
 struct symbol {
     char *identifier;

@@ -6,6 +6,7 @@
 char* currentOpPseudoType = NULL;
 
 bool isPrimaryProcessParseTreeSucceed(struct parseTree *parseTree){
+    printf(parseTree -> name);
     if (!(parseTree->left) || !(parseTree->right)) {
         return parseTree->name;
     }

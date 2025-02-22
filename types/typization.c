@@ -1,43 +1,42 @@
 #include "../graph/graphForExternal.h"
 #include "utils.h"
+#include "errors.h"
 
 #include <stdio.h>
 
+struct typeError *errorList = NULL;
 char* currentOpPseudoType = NULL;
 
-bool isPrimaryProcessParseTreeSucceed(struct parseTree *parseTree){
-    printf(parseTree -> name);
+void checkForTypeError(char* opType, char* opName) {
+    if (currentOpPseudoType != NULL && strcmp(opType, currentOpPseudoType) != 0) {
+        addTypeError(&errorList, opName, currentOpPseudoType);
+    }
+}
+
+void primaryProcessParseTree(struct parseTree *parseTree) {
     if (!(parseTree->left) || !(parseTree->right)) {
-        return parseTree->name;
+        char* opType = detectType(parseTree->name);
+        checkForTypeError(opType, parseTree->name);
+        return;
     }
     if (strcmp(parseTree->name, "op") == 0) {
-        isPrimaryProcessParseTreeSucceed(parseTree->right);
+        primaryProcessParseTree(parseTree->right);
     } else {
         if (currentOpPseudoType == NULL) {
-            currentOpPseudoType = detectType(parseTree -> name);
-            if (strcmp(currentOpPseudoType, "unknown") == 0) {
-                printf("Unknown type %s\n", parseTree->name);
-                return false;
-            }
+            currentOpPseudoType = detectType(parseTree -> right -> name);
         } else {
-            char* opName = detectType(parseTree->name);
-            if (strcmp(currentOpPseudoType, opName) != 0) {
-                printf("Unknown type %s\n", parseTree->name);
-                return false;
-            }
+            char* opType = detectType(parseTree->right->name);
+            checkForTypeError(opType, parseTree->right->name);
         }
-        isPrimaryProcessParseTreeSucceed(parseTree->left);
+        primaryProcessParseTree(parseTree->left);
     }
 }
 
 void processReservedOP(struct cfgNode *node) {
     if (strcmp(node->name, "OP_ASSIGN") == 0) {
-        bool test = isPrimaryProcessParseTreeSucceed(node->parseTree);
-        if (test) {
-            printf("current op type: %s\n", currentOpPseudoType);
-        }
+        primaryProcessParseTree(node->parseTree);
     } else {
-        return;
+        printf("error");
     }
 }
 
@@ -64,5 +63,9 @@ void processGraphToBuild(struct programGraph *graph) {
     if (!graph) return;
     for (int i = 0; i < graph->funcCount; i++) {
         processGraphFunc(graph->functions[i]);
+    }
+
+    if (errorList != NULL) {
+        printErrors(errorList);
     }
 }

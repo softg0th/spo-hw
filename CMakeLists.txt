@@ -13,5 +13,7 @@ add_executable(spo main.c lang/MyLangLexer.c lang/MyLangParser.c
         types/typization.h
         types/utils.c
         graph/graphForExternal.h
-        types/utils.h)
+        types/utils.h
+        types/errors.c
+        types/errors.h)
 target_link_libraries(spo antlr3c)

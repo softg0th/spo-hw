@@ -44,3 +44,6 @@ struct typeError {
 
 void addTypeError(struct typeError **elist, char* value, dataType expectedType);
 void printErrors(struct typeError *elist);
+listOfTables* initListOfTables(int funcCount);
+symbolTable* initSymbolTable(listOfTables* list, char* name);
+void appendSymbolTable(symbolTable* table, char* name, dataType type);

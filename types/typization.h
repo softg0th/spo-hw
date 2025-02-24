@@ -1,5 +1,6 @@
 #include "../graph/graphForExternal.h"
 
+/*
 struct symbol {
     char *identifier;
     enum {
@@ -23,5 +24,7 @@ struct symbolTable {
     int numSymbols;
     struct func *f;
 };
+*/
+
 
 void processGraphToBuild(struct programGraph *graph);

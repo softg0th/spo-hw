@@ -5,27 +5,27 @@
 #include <stdio.h>
 
 struct typeError *errorList = NULL;
-char* currentOpPseudoType = NULL;
+dataType currentOpPseudoType = UNKNOWN;
 
-void checkForTypeError(char* opType, char* opName) {
-    if (currentOpPseudoType != NULL && strcmp(opType, currentOpPseudoType) != 0) {
-        addTypeError(&errorList, opName, currentOpPseudoType);
+void checkForTypeError(dataType opType, char* opName) {
+    if (currentOpPseudoType != UNKNOWN && (opType != currentOpPseudoType)) {
+        addTypeError(&errorList, opName, "currentOpPseudoType");    // TODO: transform enum to string
     }
 }
 
 void primaryProcessParseTree(struct parseTree *parseTree) {
     if (!(parseTree->left) || !(parseTree->right)) {
-        char* opType = detectType(parseTree->name);
+        dataType opType = detectType(parseTree->name);
         checkForTypeError(opType, parseTree->name);
         return;
     }
     if (strcmp(parseTree->name, "op") == 0) {
         primaryProcessParseTree(parseTree->right);
     } else {
-        if (currentOpPseudoType == NULL) {
+        if (currentOpPseudoType == UNKNOWN) {
             currentOpPseudoType = detectType(parseTree -> right -> name);
         } else {
-            char* opType = detectType(parseTree->right->name);
+            dataType opType = detectType(parseTree->right->name);
             checkForTypeError(opType, parseTree->right->name);
         }
         primaryProcessParseTree(parseTree->left);

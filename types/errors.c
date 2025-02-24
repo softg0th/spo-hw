@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "errors.h"
+#include "utils.h"
 
-void addTypeError(struct typeError **elist, char* value, char* expectedType) {
+void addTypeError(struct typeError **elist, char* value, dataType expectedType) {
     if (!elist) return;
     struct typeError *node = malloc(sizeof(struct typeError));
     if (!node) {
@@ -12,7 +12,7 @@ void addTypeError(struct typeError **elist, char* value, char* expectedType) {
     }
 
     node->value = strdup(value);
-    node->expectedType = strdup(expectedType);
+    node->expectedType = expectedType;
     node->next = NULL;
 
     if (*elist == NULL) {
@@ -31,7 +31,6 @@ void freeErrors(struct typeError *elist) {
         struct typeError *temp = elist;
         elist = elist->next;
         free(temp->value);
-        free(temp->expectedType);
         free(temp);
     }
 }
@@ -39,7 +38,7 @@ void freeErrors(struct typeError *elist) {
 
 void printErrors(struct typeError *elist) {
     while (elist) {
-        printf("An error occured! %s is not an %s\n", elist->value, elist->expectedType);
+        printf("An error occured! %s is not an %d\n", elist->value, elist->expectedType);
         elist = elist->next;
     }
     freeErrors(elist);

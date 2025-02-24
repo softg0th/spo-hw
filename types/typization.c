@@ -1,15 +1,14 @@
 #include "../graph/graphForExternal.h"
 #include "utils.h"
-#include "errors.h"
 
 #include <stdio.h>
 
 struct typeError *errorList = NULL;
-dataType currentOpPseudoType = UNKNOWN;
+dataType currentOpPseudoType = UNKNOWN_TYPE;
 
 void checkForTypeError(dataType opType, char* opName) {
-    if (currentOpPseudoType != UNKNOWN && (opType != currentOpPseudoType)) {
-        addTypeError(&errorList, opName, "currentOpPseudoType");    // TODO: transform enum to string
+    if (currentOpPseudoType != UNKNOWN_TYPE && (opType != currentOpPseudoType)) {
+        addTypeError(&errorList, opName, currentOpPseudoType);    // TODO: transform enum to string
     }
 }
 
@@ -22,7 +21,7 @@ void primaryProcessParseTree(struct parseTree *parseTree) {
     if (strcmp(parseTree->name, "op") == 0) {
         primaryProcessParseTree(parseTree->right);
     } else {
-        if (currentOpPseudoType == UNKNOWN) {
+        if (currentOpPseudoType == UNKNOWN_TYPE) {
             currentOpPseudoType = detectType(parseTree -> right -> name);
         } else {
             dataType opType = detectType(parseTree->right->name);
@@ -61,6 +60,7 @@ void processGraphFunc(struct funcNode *fn) {
 
 void processGraphToBuild(struct programGraph *graph) {
     if (!graph) return;
+
     for (int i = 0; i < graph->funcCount; i++) {
         processGraphFunc(graph->functions[i]);
     }

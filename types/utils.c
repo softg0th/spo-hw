@@ -7,26 +7,28 @@
 #include <stdlib.h>
 
 listOfTables* initListOfTables(int funcCount) {
-    struct listOfTables *list = calloc(1, sizeof(struct listOfTables));
-
-    for (unsigned int i = 0; i < funcCount; i++) {
-        list->functions = realloc(list->tables,
-                sizeof(struct funcNode *) * (funcCount + 1));
-    }
-    return *list;
+    listOfTables *list = calloc(1, sizeof(listOfTables));
+    list->tables = calloc(funcCount + 1, sizeof(symbolTable *));
+    return list;
 }
 
 symbolTable* initSymbolTable(listOfTables* list, char* name) {
-    struct symbolTable *table = calloc(1, sizeof(struct symbolTable));
+    symbolTable *table = calloc(1, sizeof(symbolTable));
 
-    table->name=name;
+    table->name = strdup(name);
     table->count = 0;
-    return *table;
+    int i = 0;
+    while (list->tables[i] != NULL) {
+        i++;
+    }
+    list->tables[i] = table;
+
+    return table;
 }
 
 void appendSymbolTable(symbolTable* table, char* name, dataType type) {
     if (table->count < SYMBOL_TABLE_CAPACITY) {
-        strcpy(table->symbols[table->count].name, name);
+        table->symbols[table->count].name = strdup(name);
         table->symbols[table->count].type = type;
         table->count++;
     }
@@ -52,9 +54,9 @@ bool isInteger(char *str) {
 }
 
 dataType detectType(char *value) {
-    dataType dt = CUSTOM;
+    dataType dt = CUSTOM_TYPE;
     if (isInteger(value)) {
-        dt = INT;
+        dt = INT_TYPE;
     }
     return dt;
 }

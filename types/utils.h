@@ -34,7 +34,7 @@ typedef struct {
 
 
 bool isInteger(char *str);
-dataType detectType(char *value);
+dataType detectType(symbolTable* table, char *value);
 
 struct typeError {
     char* value;

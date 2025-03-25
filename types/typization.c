@@ -21,7 +21,7 @@ void checkForTypeError(dataType opType, char* opName) {
 void primaryProcessParseTree(struct parseTree *parseTree) {
     bool binopStatus = isBinop(parseTree->name);
     if (!(parseTree->left) || !(parseTree->right) && binopStatus) {
-        dataType opType = detectType(parseTree->name);
+        dataType opType = detectType(currentTable, parseTree->name);
         currentOpPseudoType = opType;
         checkForTypeError(opType, parseTree->name);
         return;
@@ -31,9 +31,9 @@ void primaryProcessParseTree(struct parseTree *parseTree) {
         primaryProcessParseTree(parseTree->right);
     } else {
         if (currentOpPseudoType == UNKNOWN_TYPE) {
-            currentOpPseudoType = detectType(parseTree -> right -> name);
+            currentOpPseudoType = detectType(currentTable, parseTree -> right -> name);
         } else {
-            dataType opType = detectType(parseTree->right->name);
+            dataType opType = detectType(currentTable, parseTree->right->name);
             checkForTypeError(opType, parseTree->right->name);
         }
         primaryProcessParseTree(parseTree->left);
@@ -45,9 +45,9 @@ void processReservedOP(struct cfgNode *node) {
         primaryProcessParseTree(node->parseTree);
         if (!hasErrors) {
             if (primaryEntryPoint->right->right != NULL) {
-                appendSymbolTable(currentTable, primaryEntryPoint->right->right->name, currentOpPseudoType);
+                appendSymbolTable(currentTable, primaryEntryPoint->left->left->name, currentOpPseudoType);
             } else {
-                appendSymbolTable(currentTable, primaryEntryPoint->right->name, currentOpPseudoType);
+                appendSymbolTable(currentTable, primaryEntryPoint->left->left->name, currentOpPseudoType);
             }
             primaryEntryPoint = NULL;
             currentOpPseudoType = UNKNOWN_TYPE;

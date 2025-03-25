@@ -55,10 +55,15 @@ bool isInteger(char *str) {
     return true;
 }
 
-dataType detectType(char *value) {
+dataType detectType(symbolTable* table, char *value) {
     dataType dt = CUSTOM_TYPE;
     if (isInteger(value)) {
         dt = INT_TYPE;
+    } else {
+        symbol* symb = lookupSymbol(table, value);
+        if (symb != NULL) {
+            return symb->type;
+        }
     }
     return dt;
 }

@@ -8,22 +8,25 @@ listOfTables* list = NULL;
 symbolTable* currentTable = NULL;
 dataType currentOpPseudoType = UNKNOWN_TYPE;
 bool hasErrors = false;
+bool singleVar = false;
 static struct parseTree* primaryEntryPoint = NULL;
 
 void checkForTypeError(dataType opType, char* opName) {
     if (currentOpPseudoType != UNKNOWN_TYPE && (opType != currentOpPseudoType)) {
-        addTypeError(&errorList, opName, currentOpPseudoType);    // TODO: transform enum to string
+        addTypeError(&errorList, opName, currentOpPseudoType);
         hasErrors = true;
     }
 }
 
 void primaryProcessParseTree(struct parseTree *parseTree) {
-    if (!(parseTree->left) || !(parseTree->right)) {
+    bool binopStatus = isBinop(parseTree->name);
+    if (!(parseTree->left) || !(parseTree->right) && binopStatus) {
         dataType opType = detectType(parseTree->name);
+        currentOpPseudoType = opType;
         checkForTypeError(opType, parseTree->name);
         return;
     }
-    if (strcmp(parseTree->name, "op") == 0) {
+    if (strcmp(parseTree->name, "OP_ASSIGN") == 0) {
         primaryEntryPoint = parseTree;
         primaryProcessParseTree(parseTree->right);
     } else {
@@ -41,7 +44,11 @@ void processReservedOP(struct cfgNode *node) {
     if (strcmp(node->name, "OP_ASSIGN") == 0) {
         primaryProcessParseTree(node->parseTree);
         if (!hasErrors) {
-            appendSymbolTable(currentTable, primaryEntryPoint->right->right->name, currentOpPseudoType);
+            if (primaryEntryPoint->right->right != NULL) {
+                appendSymbolTable(currentTable, primaryEntryPoint->right->right->name, currentOpPseudoType);
+            } else {
+                appendSymbolTable(currentTable, primaryEntryPoint->right->name, currentOpPseudoType);
+            }
             primaryEntryPoint = NULL;
             currentOpPseudoType = UNKNOWN_TYPE;
         }

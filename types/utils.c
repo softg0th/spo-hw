@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <string.h>
-
+#include <stdio.h>
 #include "utils.h"
 
 #include <stdlib.h>
@@ -31,6 +31,8 @@ void appendSymbolTable(symbolTable* table, char* name, dataType type) {
         table->symbols[table->count].name = strdup(name);
         table->symbols[table->count].type = type;
         table->count++;
+
+        printf("%s: %d", name, type);
     }
 }
 
@@ -59,4 +61,19 @@ dataType detectType(char *value) {
         dt = INT_TYPE;
     }
     return dt;
+}
+
+bool isBinop(char *value) {
+    const char* binopNames[] = {
+        "OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV", "OP_MOD",
+        "OP_LSHIFT", "BINOP_RSHIFT", "BINOP_AND", "OP_XOR", "OP_OR",
+        "OP_ASSIGN"
+    };
+
+    for (int i =0; i < 11; i++) {
+        if (strcmp(value, binopNames[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
 }

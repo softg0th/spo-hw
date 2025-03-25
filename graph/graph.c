@@ -445,13 +445,13 @@ static void processReturn(pANTLR3_BASE_TREE retTree, struct context *ctx) {
     ctx->curr = r;
 }
 
+/*
 static bool isTrivialNode(const char* n) {
     if (!n) return true;
     if (!strcmp(n,"Identifier"))    return true;
     if (!strcmp(n,"Literal"))       return true;
     if (!strcmp(n,"Builtin"))       return true;
     if (!strcmp(n,"TypeRefToken"))  return true;
-    if (!strcmp(n,"VarDeclToken"))  return true;
     if (!strcmp(n,"ArrayToken"))    return true;
     if (!strcmp(n,"ArrayTokenSuffix")) return true;
     if (!strcmp(n,"FuncSignatureToken")) return true;
@@ -459,30 +459,106 @@ static bool isTrivialNode(const char* n) {
     if (!strcmp(n,"Body"))         return true;
     return false;
 }
+*/
 
-static void processGenericNode(pANTLR3_BASE_TREE tree, struct context *ctx) {
-    if (!tree) return;
-    pANTLR3_STRING s = tree->toString(tree);
-    const char* nm = (s && s->chars) ? s->chars : "";
-    
-    if (isTrivialNode(nm)) {
-        unsigned cc = tree->getChildCount(tree);
-        for (unsigned i=0; i<cc; i++) {
-            processTreeNode(tree->getChild(tree,i), ctx);
+struct parseTree *buildParseTreeForExpression(pANTLR3_BASE_TREE expr)
+{
+    if (!expr) return NULL;
+
+    if (isOperation(expr)) {
+        struct parseTree *opNode = calloc(1, sizeof(struct parseTree));
+        char *opName = generateBinopName(expr);
+        if (!opName) {
+            opName = safeStrdup("op");
         }
+        opNode->name = opName;
+
+        if (expr->getChildCount(expr) == 2) {
+            opNode->left  = buildParseTreeForExpression(expr->getChild(expr,0));
+            opNode->right = buildParseTreeForExpression(expr->getChild(expr,1));
+        }
+        return opNode;
+    }
+    else {
+        struct parseTree *leaf = calloc(1, sizeof(struct parseTree));
+        pANTLR3_STRING s = expr->toString(expr);
+        const char *txt = (s && s->chars) ? s->chars : "";
+        leaf->name = safeStrdup(txt);
+        return leaf;
+    }
+}
+
+struct parseTree *buildAssignParseTree(pANTLR3_BASE_TREE varDecl)
+{
+    if (!varDecl) return NULL;
+    unsigned cc = varDecl->getChildCount(varDecl);
+    if (cc < 2) return NULL;
+
+    pANTLR3_BASE_TREE varChild = varDecl->getChild(varDecl, 0);
+    pANTLR3_BASE_TREE exprChild = varDecl->getChild(varDecl, 1);
+
+    struct parseTree *root = calloc(1, sizeof(struct parseTree));
+    root->name = safeStrdup("OP_ASSIGN");
+
+    struct parseTree *opPlace = calloc(1, sizeof(struct parseTree));
+    opPlace->name = safeStrdup("OP_PLACE");
+    root->left = opPlace;
+
+    struct parseTree *varNode = calloc(1, sizeof(struct parseTree));
+    pANTLR3_STRING vs = varChild->toString(varChild);
+    const char *varName = (vs && vs->chars) ? vs->chars : "unknownVar";
+    varNode->name = safeStrdup(varName);
+    opPlace->left = varNode;
+
+    root->right = buildParseTreeForExpression(exprChild);
+
+    return root;
+}
+
+
+static void processGenericNode(pANTLR3_BASE_TREE tree, struct context *ctx)
+{
+    if (!tree) return;
+
+    pANTLR3_STRING s = tree->toString(tree);
+    const char *nm = (s && s->chars) ? s->chars : "";
+
+    if (!strcmp(nm, "VarDeclToken"))
+    {
+        unsigned cc = tree->getChildCount(tree);
+        if (cc < 2)
+        {
+            return;
+        }
+
+        struct cfgNode *assignNode = calloc(1, sizeof(struct cfgNode));
+        assignNode->id = nodeId++;
+        assignNode->name = safeStrdup("OP_ASSIGN");
+        assignNode->nodeOp = safeStrdup("OP_ASSIGN");
+        assignNode->isParseTreeRoot = true;
+        assignNode->parseTree = buildAssignParseTree(tree);
+        addNodeToGlobalList(assignNode);
+
+        if (ctx->curr) {
+            ctx->curr->defaultBranch = assignNode;
+        }
+        ctx->curr = assignNode;
         return;
     }
-    struct cfgNode* g = createCfgNode(tree);
-    g->name = safeStrdup(nm);
+
+    struct cfgNode *g = createCfgNode(tree);
+    if (!g->name) {
+        g->name = safeStrdup(nm);
+    }
 
     if (ctx->curr) {
         ctx->curr->defaultBranch = g;
     }
     ctx->curr = g;
 
-    unsigned cc=tree->getChildCount(tree);
-    for (unsigned i=0;i<cc;i++) {
-        pANTLR3_BASE_TREE ch=tree->getChild(tree,i);
+    unsigned childCount = tree->getChildCount(tree);
+    for (unsigned i = 0; i < childCount; i++) {
+        pANTLR3_BASE_TREE ch = tree->getChild(tree,i);
         processTreeNode(ch, ctx);
     }
 }
@@ -681,6 +757,22 @@ static void buildOpTreesForFunc(struct funcNode *fn)
     memset(used, 0, sizeof(used));
     int cnt = 0;
     collectNodes(fn->cfgEntry, arr, used, &cnt);
+    bool foundOp = false;
+    for (int j = 0; j < cnt; j++) {
+        if (arr[j]->isParseTreeRoot) {
+            foundOp = true;
+            break;
+        }
+    }
+    if (!foundOp && cnt > 0) {
+        arr[0]->isParseTreeRoot = true;
+        if (!arr[0]->nodeOp) {
+            arr[0]->nodeOp = safeStrdup("COMPLEX_EXPRESSION");
+            free(arr[0]->name);
+            arr[0]->name   = safeStrdup("COMPLEX_EXPRESSION");
+        }
+    }
+
     int i = 0;
     while (i < cnt)
     {
@@ -695,6 +787,7 @@ static void buildOpTreesForFunc(struct funcNode *fn)
         }
     }
 }
+
 
 void buildOperationTrees(struct programGraph *graph) {
     if (!graph) return;
@@ -749,18 +842,20 @@ void clearGraph(struct programGraph *graph) {
     }
 }
 
-static struct parseTree* beautifyTreeFromRoot(struct parseTree *node, char* variableName) {
-    struct parseTree* op = malloc(sizeof(struct parseTree));
-    struct parseTree* vn = malloc(sizeof(struct parseTree));
+static struct parseTree* beautifyTreeFromRoot(struct parseTree *node, char* variableName)
+{
+    if (!node) return NULL;
 
-    
-    vn->name=variableName;
-    op->left=vn;
-    op->name="OP_PLACE";
-    
-    node->right = node->left;
+    if (node->left != NULL || node->right != NULL) {
+        return node;
+    }
+    struct parseTree* op = calloc(1, sizeof(struct parseTree));
+    struct parseTree* vn = calloc(1, sizeof(struct parseTree));
+
+    op->name = safeStrdup("OP_PLACE");
+    op->left = vn;
+    vn->name = safeStrdup(variableName);
     node->left = op;
-
     return node;
 }
 
@@ -778,28 +873,30 @@ void postProcessGraphTreesFunc(struct funcNode *fn) {
     {
         struct cfgNode *nd = arr[i];
 
-        if(nd->isParseTreeRoot) {
-            nd->parseTree= beautifyTreeFromRoot(nd->parseTree, nd->name);
+        if (nd->isParseTreeRoot && nd->parseTree) {
+            if (strcmp(nd->parseTree->name, "OP_ASSIGN") != 0) {
+                nd->parseTree = beautifyTreeFromRoot(nd->parseTree, nd->name);
+            }
             nd->name = safeStrdup("OP_ASSIGN");
         }
+
         i++;
     }
 }
 
-char* getLastParseTreeElement(struct parseTree *pt) {
-    struct parseTree* tree= malloc(sizeof(struct parseTree));
-    struct parseTree* newTree= malloc(sizeof(struct parseTree));
-    newTree = pt->right;
-    tree = pt -> right;
-    tree = tree->right;
-
-    char* output = tree->name;
-    while (newTree->left != NULL) {
-        newTree = newTree->left;
+char* getLastParseTreeElement(struct parseTree *pt)
+{
+    if (!pt) return NULL;
+    while (pt->right) {
+        pt = pt->right;
+    }
+    while (pt->left) {
+        pt = pt->left;
         pulse++;
     }
-    return output;
+    return pt->name;
 }
+
 
 void deleteExtraNodes(struct funcNode *fn) 
 {

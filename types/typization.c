@@ -75,7 +75,7 @@ void processGraphFunc(struct funcNode *fn) {
 
 }
 
-void processGraphToBuild(struct programGraph *graph) {
+symbolTable* processGraphToBuild(struct programGraph *graph) {
     if (!graph) return;
     list = initListOfTables(graph->funcCount);
     for (int i = 0; i < graph->funcCount; i++) {
@@ -85,4 +85,5 @@ void processGraphToBuild(struct programGraph *graph) {
     if (errorList != NULL) {
         printErrors(errorList);
     }
+    return currentTable;
 }

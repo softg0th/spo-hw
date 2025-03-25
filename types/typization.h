@@ -1,4 +1,5 @@
 #include "../graph/graphForExternal.h"
+#include "utils.h"
 
 /*
 struct symbol {
@@ -27,4 +28,4 @@ struct symbolTable {
 */
 
 
-void processGraphToBuild(struct programGraph *graph);
+symbolTable* processGraphToBuild(struct programGraph *graph);

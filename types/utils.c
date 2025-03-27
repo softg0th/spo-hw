@@ -31,6 +31,7 @@ void appendSymbolTable(symbolTable* table, char* name, dataType type) {
         table->symbols[table->count].name = strdup(name);
         table->symbols[table->count].type = type;
         table->count++;
+        printf("%s %d \n", name, type);
     }
 }
 
@@ -68,12 +69,11 @@ dataType detectType(symbolTable* table, char *value) {
 
 bool isBinop(char *value) {
     const char* binopNames[] = {
-        "OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV", "OP_MOD",
-        "OP_LSHIFT", "BINOP_RSHIFT", "BINOP_AND", "OP_XOR", "OP_OR",
-        "OP_ASSIGN"
+        "+", "-", "*", "/", "%", "<<", ">>", "&", "^", "|",
+       "="
     };
 
-    for (int i =0; i < 11; i++) {
+    for (int i =0; i < sizeof(binopNames); i++) {
         if (strcmp(value, binopNames[i]) == 0) {
             return true;
         }

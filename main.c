@@ -44,7 +44,7 @@ int main(void)
     }
     pANTLR3_BASE_TREE *tree = makeTree(content, filename);
     struct programGraph* graph = processTree(tree);
-    compile(graph);
+    compile(tree, graph);
     fclose(file);
     return 0;
 }

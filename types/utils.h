@@ -1,4 +1,5 @@
 #include <stdbool.h>
+#include <antlr3.h>
 
 #define SYMBOL_TABLE_CAPACITY 1000
 
@@ -31,6 +32,12 @@ typedef struct {
 typedef struct {
     struct symbolTable **tables;
 } listOfTables;
+
+typedef struct {
+    pANTLR3_BASE_TREE* trees;
+    size_t size;
+    size_t capacity;
+} listOfVariables;
 
 
 bool isInteger(char *str);

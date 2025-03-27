@@ -28,4 +28,4 @@ struct symbolTable {
 */
 
 
-symbolTable* processGraphToBuild(struct programGraph *graph);
+symbolTable* processTreeToBuild(pANTLR3_BASE_TREE tree);

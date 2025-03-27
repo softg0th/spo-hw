@@ -1,15 +1,14 @@
-#include "../graph/graphForExternal.h"
 #include "utils.h"
-
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 struct typeError *errorList = NULL;
 listOfTables* list = NULL;
 symbolTable* currentTable = NULL;
+listOfVariables* currentVariables = NULL;
 dataType currentOpPseudoType = UNKNOWN_TYPE;
 bool hasErrors = false;
-bool singleVar = false;
-static struct parseTree* primaryEntryPoint = NULL;
 
 void checkForTypeError(dataType opType, char* opName) {
     if (currentOpPseudoType != UNKNOWN_TYPE && (opType != currentOpPseudoType)) {
@@ -18,72 +17,85 @@ void checkForTypeError(dataType opType, char* opName) {
     }
 }
 
-void primaryProcessParseTree(struct parseTree *parseTree) {
-    bool binopStatus = isBinop(parseTree->name);
-    if (!(parseTree->left) || !(parseTree->right) && binopStatus) {
-        dataType opType = detectType(currentTable, parseTree->name);
-        currentOpPseudoType = opType;
-        checkForTypeError(opType, parseTree->name);
-        return;
+void addTree(pANTLR3_BASE_TREE tree) {
+    if (currentVariables->size == currentVariables->capacity) {
+        currentVariables->capacity *= 2;
+        currentVariables->trees = realloc(currentVariables->trees,
+            sizeof(pANTLR3_BASE_TREE) * currentVariables->capacity);
     }
-    if (strcmp(parseTree->name, "OP_ASSIGN") == 0) {
-        primaryEntryPoint = parseTree;
-        primaryProcessParseTree(parseTree->right);
-    } else {
-        if (currentOpPseudoType == UNKNOWN_TYPE) {
-            currentOpPseudoType = detectType(currentTable, parseTree -> right -> name);
-        } else {
-            dataType opType = detectType(currentTable, parseTree->right->name);
-            checkForTypeError(opType, parseTree->right->name);
+    currentVariables->trees[currentVariables->size++] = tree;
+}
+
+void detectVarDecl(pANTLR3_BASE_TREE tree) {
+    if (!tree) return;
+
+    unsigned int childCount = tree->getChildCount(tree);
+    for (unsigned int i = 0; i < childCount; ++i) {
+        pANTLR3_BASE_TREE child = (pANTLR3_BASE_TREE)tree->getChild(tree, i);
+        if (!child) continue;
+
+        const char* tokenText = (char*)child->getText(child)->chars;
+
+        if (strcmp(tokenText, "VarDecl") == 0 || strcmp(tokenText, "VarDeclToken") == 0) {
+            addTree(child);
         }
-        primaryProcessParseTree(parseTree->left);
+
+        detectVarDecl(child);
     }
 }
 
-void processReservedOP(struct cfgNode *node) {
-    if (strcmp(node->name, "OP_ASSIGN") == 0) {
-        primaryProcessParseTree(node->parseTree);
-        if (!hasErrors) {
-            if (primaryEntryPoint->right->right != NULL) {
-                appendSymbolTable(currentTable, primaryEntryPoint->left->left->name, currentOpPseudoType);
-            } else {
-                appendSymbolTable(currentTable, primaryEntryPoint->left->left->name, currentOpPseudoType);
-            }
-            primaryEntryPoint = NULL;
-            currentOpPseudoType = UNKNOWN_TYPE;
-        }
+char* getLeftmostLeaf(pANTLR3_BASE_TREE node) {
+    if (!node) return NULL;
+    if (node->getChildCount(node) == 0) {
+        return (char*) node->getText(node)->chars;
     }
+    return getLeftmostLeaf((pANTLR3_BASE_TREE)node->getChild(node, 0));
 }
 
-void processGraphFunc(struct funcNode *fn) {
-    if (!fn || !fn->cfgEntry)
-        return;
+void detectTypesOfAllVariables() {
+    for (size_t i = 0; i < currentVariables->size; ++i) {
+        pANTLR3_BASE_TREE varDecl = currentVariables->trees[i];
+        if (!varDecl || varDecl->getChildCount(varDecl) < 2)
+            continue;
+
+        pANTLR3_BASE_TREE idNode = varDecl->getChild(varDecl, 0);
+        pANTLR3_BASE_TREE exprNode = varDecl->getChild(varDecl, 1);
+
+        if (!idNode || !exprNode)
+            continue;
+
+        char* varName = (char*)idNode->getText(idNode)->chars;
+        char* representative = getLeftmostLeaf(exprNode);
+        dataType inferredType = detectType(currentTable, representative);
+
+        appendSymbolTable(currentTable, strdup(varName), inferredType);
+    }
+
+    currentOpPseudoType = UNKNOWN_TYPE;
+}
+
+void processTreeFunc(pANTLR3_BASE_TREE tree) {
+    tree = tree->getChild(tree, 1);
+
+    currentVariables = malloc(sizeof(listOfVariables));
+    currentVariables->size = 0;
+    currentVariables->capacity = 4;
+    currentVariables->trees = malloc(sizeof(pANTLR3_BASE_TREE) * currentVariables->capacity);
+
     currentTable = initSymbolTable(list, "temp");
-    struct cfgNode *arr[4096];
-    bool used[65536];
-    memset(used, 0, sizeof(used));
-    int cnt = 0;
-    collectNodes(fn->cfgEntry, arr, used, &cnt);
-    int i = 0;
-    while (i < cnt) {
-        struct cfgNode *nd = arr[i];
-        if (nd->isParseTreeRoot) {
-            processReservedOP(nd);
-        }
-        i++;
-    }
-
+    detectVarDecl(tree);
+    detectTypesOfAllVariables();
 }
 
-symbolTable* processGraphToBuild(struct programGraph *graph) {
-    if (!graph) return;
-    list = initListOfTables(graph->funcCount);
-    for (int i = 0; i < graph->funcCount; i++) {
-        processGraphFunc(graph->functions[i]);
+symbolTable* processTreeToBuild(pANTLR3_BASE_TREE tree) {
+    if (!tree) return NULL;
+    int funcCount = tree->getChildCount(tree);
+    list = initListOfTables(funcCount);
+
+    for (int i = 0; i < funcCount; i++) {
+        pANTLR3_BASE_TREE child = (pANTLR3_BASE_TREE)tree->getChild(tree, i);
+        processTreeFunc(child);
     }
 
-    if (errorList != NULL) {
-        printErrors(errorList);
-    }
     return currentTable;
 }

@@ -14,25 +14,6 @@ pANTLR3_BASE_TREE sourceNode = NULL;
 pANTLR3_BASE_TREE lastArraySuffixNode = NULL;
 int counter = 0;
 
-/*
-bool isOperation(pANTLR3_BASE_TREE tree) {
-    if (tree == NULL) return false;
-
-    char* nodeName = (char*)tree->toString(tree)->chars;
-    if (nodeName == NULL) return false;
-
-    const char* binaryOps[] = {
-        "*", "/", "%", "<<", ">>", "&", "^", "|",
-        "="
-    };
-    for (size_t i = 0; i < sizeof(binaryOps) / sizeof(binaryOps[0]); ++i) {
-        if (strcmp(nodeName, binaryOps[i]) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
-*/
 
 pANTLR3_BASE_TREE rebuildTree(pANTLR3_BASE_TREE tree) {
     if (tree == NULL) {
@@ -45,7 +26,6 @@ pANTLR3_BASE_TREE rebuildTree(pANTLR3_BASE_TREE tree) {
     for (unsigned int i = 0; i < childCount; ++i) {
         pANTLR3_BASE_TREE child = (pANTLR3_BASE_TREE)tree->getChild(tree, i);
         char* childNode = (char*)child->toString(child)->chars;
-        //printf("%s\n", childNode);
         if (strcmp(currentNode, "Body") == 0) {
             sourceNode = tree;
         }

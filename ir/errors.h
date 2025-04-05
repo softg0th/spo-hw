@@ -1,0 +1,1 @@
+void handleError(int errorCode);

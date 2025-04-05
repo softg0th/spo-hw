@@ -18,7 +18,10 @@ add_executable(spo main.c lang/MyLangLexer.c lang/MyLangParser.c
         compiler/compiler.c
         compiler/compiler.h
         compiler/lib.c
+        compiler/lib.h
+        compiler/asm.c
         ir/ir.c
         ir/ir.h
-        ir/errors.c)
+        ir/errors.c
+        ir/errors.h)
 target_link_libraries(spo antlr3c)

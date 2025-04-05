@@ -21,6 +21,7 @@ typedef enum {
 typedef struct {
     char* name;
     dataType type;
+    int address;
 } symbol;
 
 typedef struct {
@@ -54,3 +55,4 @@ void printErrors(struct typeError *elist);
 listOfTables* initListOfTables(int funcCount);
 symbolTable* initSymbolTable(listOfTables* list, char* name);
 void appendSymbolTable(symbolTable* table, char* name, dataType type);
+bool insertSymbolAddress(symbolTable* table, const char* name, int address);

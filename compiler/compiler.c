@@ -1,7 +1,9 @@
 #include "../types/typization.h"
 #include "../ir/ir.h"
 
-#include "lib.c"
+#include "lib.h"
+
+symbolTable* globalSymTable;
 
 static bool isOperation(char* ptName) {
     const char* binaryOps[] = {
@@ -18,6 +20,8 @@ static bool isOperation(char* ptName) {
 }
 
 int tempCounter = 0;
+int nextFreeAddress = 0x1000;
+
 
 char* allocTemp() {
     char* buf = malloc(10);
@@ -32,38 +36,57 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         return strdup(pt->name);
     }
 
+    if (strcmp(pt->name, "OP_PLACE") == 0 && pt->left) {
+        return strdup(pt->left->name);
+    }
+
     if (isOperation(pt->name)) {
+        if (strcmp(pt->name, "OP_ASSIGN") == 0) {
+            char* dst = processParseTreeAndGenerateIR(pt->left);
+            char* rhs = processParseTreeAndGenerateIR(pt->right);
+            bool success = insertSymbolAddress(globalSymTable, dst, nextFreeAddress);
+
+            if (!success) {
+                exit(1);
+            }
+
+            nextFreeAddress += 2;
+            emit_mov(dst, rhs);
+            return NULL;
+        }
+
         char* lhs = processParseTreeAndGenerateIR(pt->left);
         char* rhs = processParseTreeAndGenerateIR(pt->right);
         char* result = allocTemp();
 
         if (strcmp(pt->name, "OP_ADD") == 0) {
-            //emit_add(result, lhs, rhs);
+            printf("add %s %s %s\n", result, lhs, rhs);
+            emit_add(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_SUB") == 0) {
-            //emit_sub(result, lhs, rhs);
+            printf("sub %s %s %s\n", result, lhs, rhs);
+            emit_sub(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_MUL") == 0) {
-            //emit_mul(result, lhs, rhs);
+            emit_mul(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_DIV") == 0) {
-            //emit_div(result, lhs, rhs);
+            emit_div(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_MOD") == 0) {
-            //emit_rem(result, lhs, rhs);
-        } else if (strcmp(pt->name, "OP_ASSIGN") == 0) {
-            //emit_mov(lhs, rhs);
-            return lhs;
+            emit_rem(result, lhs, rhs);
         }
+
         return result;
     }
+
     return strdup(pt->name);
 }
 
-static void collectNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
+void collectGraphNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
     if (!node) return;
     if (used[node->id]) return;
     used[node->id] = true;
     list[*count] = node;
     (*count)++;
-    collectNodes(node->conditionalBranch, list, used, count);
-    collectNodes(node->defaultBranch, list, used, count);
+    collectGraphNodes(node->conditionalBranch, list, used, count);
+    collectGraphNodes(node->defaultBranch, list, used, count);
 }
 
 void checkFullGraph(struct funcNode *fn) {
@@ -94,5 +117,8 @@ void traverseGraph(struct programGraph *graph) {
 
 void compile(pANTLR3_BASE_TREE tree, struct programGraph *graph) {
     symbolTable* symTable = processTreeToBuild(tree);
+    globalSymTable = symTable;
     traverseGraph(graph);
+    IRInstruction* pool = get_pool();
+
 }

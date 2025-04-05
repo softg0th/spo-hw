@@ -15,4 +15,11 @@ typedef struct {
     char* src2;
 } IRInstruction;
 
+IRInstruction** get_pool();
+
 void emit_add(const char* dst, const char* lhs, const char* rhs);
+void emit_mul(const char* dst, const char* lhs, const char* rhs);
+void emit_sub(const char* dst, const char* lhs, const char* rhs);
+void emit_div(const char* dst, const char* lhs, const char* rhs);
+void emit_rem(const char* dst, const char* lhs, const char* rhs);
+void emit_mov(const char* dst, const char* src);

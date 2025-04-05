@@ -44,6 +44,17 @@ symbol* lookupSymbol(symbolTable* table, const char* name) {
     return NULL;
 }
 
+bool insertSymbolAddress(symbolTable* table, const char* name, int address) {
+    symbol* currentSymb = lookupSymbol(table, name);
+
+    if (currentSymb == NULL) {
+        return false;
+    }
+
+    currentSymb->address = address;
+    return true;
+}
+
 bool isInteger(char *str) {
     if (*str == '\0') return false;
 

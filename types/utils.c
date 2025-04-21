@@ -31,7 +31,6 @@ void appendSymbolTable(symbolTable* table, char* name, dataType type) {
         table->symbols[table->count].name = strdup(name);
         table->symbols[table->count].type = type;
         table->count++;
-        printf("%s %d \n", name, type);
     }
 }
 

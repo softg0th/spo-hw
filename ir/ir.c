@@ -2,22 +2,25 @@
 #include <stdlib.h>
 
 #include "ir.h"
+
+#include <stdio.h>
+
 #include "errors.h"
 
 #define IR_CAPACITY 1024
 
 IRInstruction* irPool[IR_CAPACITY];
-int irCount = 0;\
+int irCount = 0;
 
 IRInstruction** get_pool() {
     return irPool;
 }
 
+
 void emit_ir(IROpcodes op, const char* dst, const char* src1, const char* src2) {
     if (irCount >= IR_CAPACITY) {
         handleError(1);
     }
-
     IRInstruction* instr = malloc(sizeof(IRInstruction));
     instr->op = op;
     instr->dst = strdup(dst);
@@ -29,6 +32,7 @@ void emit_ir(IROpcodes op, const char* dst, const char* src1, const char* src2) 
 }
 
 void emit_add(const char* dst, const char* lhs, const char* rhs) {
+    printf("%s%s%s\n", dst, lhs, rhs);
     emit_ir(IR_ADD, dst, lhs, rhs);
 }
 
@@ -49,5 +53,6 @@ void emit_rem(const char* dst, const char* lhs, const char* rhs) {
 }
 
 void emit_mov(const char* dst, const char* src) {
+    printf("%s%s\n", dst, src);
     emit_ir(IR_MOV, dst, src, NULL);
 }

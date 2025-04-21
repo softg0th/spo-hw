@@ -1,9 +1,11 @@
 #include "../types/typization.h"
-#include "../ir/ir.h"
+#include "asm.h"
 
 #include "lib.h"
 
 symbolTable* globalSymTable;
+extern int irCount;
+
 
 static bool isOperation(char* ptName) {
     const char* binaryOps[] = {
@@ -31,6 +33,8 @@ char* allocTemp() {
 
 char* processParseTreeAndGenerateIR(struct parseTree *pt) {
     if (!pt) return NULL;
+    //printf("[IR] visiting node: %s\n", pt->name);
+
 
     if (!pt->left && !pt->right) {
         return strdup(pt->name);
@@ -41,6 +45,10 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
     }
 
     if (isOperation(pt->name)) {
+        if (!pt->left || !pt->right) {
+            fprintf(stderr, "[ERROR] malformed operation: %s with missing operand(s)\n", pt->name);
+            return strdup("BAD_OP");
+        }
         if (strcmp(pt->name, "OP_ASSIGN") == 0) {
             char* dst = processParseTreeAndGenerateIR(pt->left);
             char* rhs = processParseTreeAndGenerateIR(pt->right);
@@ -60,10 +68,8 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         char* result = allocTemp();
 
         if (strcmp(pt->name, "OP_ADD") == 0) {
-            printf("add %s %s %s\n", result, lhs, rhs);
             emit_add(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_SUB") == 0) {
-            printf("sub %s %s %s\n", result, lhs, rhs);
             emit_sub(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_MUL") == 0) {
             emit_mul(result, lhs, rhs);
@@ -115,10 +121,10 @@ void traverseGraph(struct programGraph *graph) {
     }
 }
 
-void compile(pANTLR3_BASE_TREE tree, struct programGraph *graph) {
+void compile(pANTLR3_BASE_TREE* tree, struct programGraph *graph) {
     symbolTable* symTable = processTreeToBuild(tree);
     globalSymTable = symTable;
     traverseGraph(graph);
-    IRInstruction* pool = get_pool();
-
+    IRInstruction** pool = get_pool();
+    generateASM(pool, irCount);
 }

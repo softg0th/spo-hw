@@ -223,7 +223,7 @@ static void getExpressionString(pANTLR3_BASE_TREE tree, char* buf, size_t sz) {
         if (strlen(buf)+strlen(nm)+2 < sz) {
             strcat(buf,nm);
         }
-    } 
+    }
     else if (cc==2 && (
              !strcmp(nm,"==")||!strcmp(nm,"!=")||
              !strcmp(nm,"+") ||!strcmp(nm,"-")  ||
@@ -898,7 +898,7 @@ char* getLastParseTreeElement(struct parseTree *pt)
 }
 
 
-void deleteExtraNodes(struct funcNode *fn) 
+void deleteExtraNodes(struct funcNode *fn)
 {
     if (!fn || !fn->cfgEntry)
         return;
@@ -917,7 +917,7 @@ void deleteExtraNodes(struct funcNode *fn)
         if (pulse != 0 ) {
             pulse--;
         }
-        if (!nd) 
+        if (!nd)
             continue;
         if (nd->isParseTreeRoot) {
             lastEle = getLastParseTreeElement(nd->parseTree);
@@ -926,9 +926,8 @@ void deleteExtraNodes(struct funcNode *fn)
             currentParseNode -> defaultBranch = nd->defaultBranch;
             currentParseNode = NULL;
             lastEle = NULL;
-            continue;
         }
-        
+
     }
 }
 
@@ -983,7 +982,7 @@ struct programGraph* processTree(pANTLR3_BASE_TREE tree) {
             }
         }
     }
-    
+
     buildOperationTrees(graph);
     clearGraph(graph);
     postProcessGraphTrees(graph);

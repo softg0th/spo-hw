@@ -1,5 +1,6 @@
 #include "../types/typization.h"
 #include "asm.h"
+#include "../ir/errors.h"
 
 #include "lib.h"
 
@@ -46,7 +47,7 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
 
     if (isOperation(pt->name)) {
         if (!pt->left || !pt->right) {
-            fprintf(stderr, "[ERROR] malformed operation: %s with missing operand(s)\n", pt->name);
+            handleError(2, pt->name);
             return strdup("BAD_OP");
         }
         if (strcmp(pt->name, "OP_ASSIGN") == 0) {
@@ -82,7 +83,61 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         return result;
     }
 
+
     return strdup(pt->name);
+}
+
+void processCondExpression(const char* exprStr, const char* labelIfFalse) {
+    char lhs[64] = {0}, rhs[64] = {0}, op[8] = {0};
+    splitCondExpr(exprStr, lhs, op, rhs);
+
+    emit_mov("r1", rhs);
+    emit_sub("r0", lhs, "r1");
+
+
+    if (strcmp(op, "==") == 0) {
+        emit_cond_jump_false("r0", labelIfFalse);
+    } else if (strcmp(op, "!=") == 0) {
+        char* labelSkip = allocLabel();
+        emit_cond_jump_false("r0", labelSkip);
+        emit_jump(labelIfFalse);
+        emit_label(labelSkip);
+    } else if (strcmp(op, ">") == 0) {
+        emit_jumpgt("r0", labelIfFalse);
+    } else if (strcmp(op, "<") == 0) {
+        emit_jumplt("r0", labelIfFalse);
+    }
+
+}
+
+void generateIRFromCFGNode(struct cfgNode* node) {
+    if (!node || !node->name) return;
+
+    if (isCond(node->name)) {
+        char* condExpr = extractCond(node->name);
+        char* labelThen = allocLabel();
+        char* labelElse = allocLabel();
+        char* labelEnd  = allocLabel();
+
+        processCondExpression(condExpr, labelThen);
+        emit_jump(labelElse);
+
+        emit_label(labelThen);
+        if (node->conditionalBranch)
+            generateIRFromCFGNode(node->conditionalBranch);
+        emit_jump(labelEnd);
+
+        emit_label(labelElse);
+        if (node->defaultBranch)
+            generateIRFromCFGNode(node->defaultBranch);
+
+        emit_label(labelEnd);
+        return;
+    }
+
+    if (node->isParseTreeRoot) {
+        processParseTreeAndGenerateIR(node->parseTree);
+    }
 }
 
 void collectGraphNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
@@ -108,9 +163,7 @@ void checkFullGraph(struct funcNode *fn) {
     for (int i = 0; i < cnt; i++) {
         bool interesting = isInterestingNode(arr[i] -> name);
         if (interesting) {
-            if (arr[i] -> isParseTreeRoot) {
-                processParseTreeAndGenerateIR(arr[i]->parseTree);
-            }
+            generateIRFromCFGNode(arr[i]);
         }
     }
 }

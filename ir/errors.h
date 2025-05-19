@@ -1,1 +1,1 @@
-void handleError(int errorCode);
+void handleError(int errorCode, char* token);

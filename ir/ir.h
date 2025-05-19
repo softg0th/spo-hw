@@ -17,9 +17,16 @@ typedef struct {
 
 IRInstruction** get_pool();
 
+char* allocLabel();
+
 void emit_add(const char* dst, const char* lhs, const char* rhs);
 void emit_mul(const char* dst, const char* lhs, const char* rhs);
 void emit_sub(const char* dst, const char* lhs, const char* rhs);
 void emit_div(const char* dst, const char* lhs, const char* rhs);
 void emit_rem(const char* dst, const char* lhs, const char* rhs);
 void emit_mov(const char* dst, const char* src);
+void emit_label(char* label);
+void emit_jump(char* label);
+void emit_cond_jump_false(char* cond, char* label);
+void emit_jumpgt(const char* cond, const char* label);
+void emit_jumplt(const char* cond, const char* label);

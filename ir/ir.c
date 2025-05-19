@@ -17,11 +17,26 @@ IRInstruction** get_pool() {
 }
 
 int labelCounter = 0;
+int loopCounter = 0;
 
 char* allocLabel() {
     char* buf = malloc(16);
     snprintf(buf, 16, "L%d", labelCounter++);
     return buf;
+}
+
+char* allocLoopLabel(int state) {
+    char* buf = malloc(16);
+
+    switch (state) {
+        case 1:
+            snprintf(buf, 16, "Lcond_%d", loopCounter++);
+            return buf;
+        case 2:
+            snprintf(buf, 16, "Lend_%d", loopCounter++);
+            return buf;
+    }
+
 }
 
 void emit_ir(IROpcodes op, const char* dst, const char* src1, const char* src2) {

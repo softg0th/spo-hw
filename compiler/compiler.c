@@ -110,11 +110,15 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
 
 }
 
+void processWhileExpression(const char* exprStr) {
+
+}
+
 void generateIRFromCFGNode(struct cfgNode* node) {
     if (!node || !node->name) return;
 
     if (isCond(node->name)) {
-        char* condExpr = extractCond(node->name);
+        char* condExpr = extractToken(node->name);
         char* labelThen = allocLabel();
         char* labelElse = allocLabel();
         char* labelEnd  = allocLabel();
@@ -133,6 +137,14 @@ void generateIRFromCFGNode(struct cfgNode* node) {
 
         emit_label(labelEnd);
         return;
+    }
+
+    if (isWhile(node->name)) {
+        char* whileExpr = extractToken(node->name);
+        char* labelCond = allocLoopLabel(1);
+        char* labelEnd = allocLoopLabel(2);
+
+
     }
 
     if (node->isParseTreeRoot) {

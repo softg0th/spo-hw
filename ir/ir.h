@@ -18,6 +18,7 @@ typedef struct {
 IRInstruction** get_pool();
 
 char* allocLabel();
+char* allocLoopLabel(int state);
 
 void emit_add(const char* dst, const char* lhs, const char* rhs);
 void emit_mul(const char* dst, const char* lhs, const char* rhs);

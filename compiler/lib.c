@@ -32,22 +32,23 @@ bool isCond(const char* node) {
     return *node == '(';
 }
 
-char* extractCond(const char* src) {
+bool isWhile(const char* node) {
+    if (!node) return false;
+
+    if (node[0] != 'w' || node[4] != 'e') return false;
+
+    while (isspace(*node)) node++;
+    return *node == '(';
+}
+
+char* extractToken(const char* src) {
     const char* start = src;
     const char* end = src + strlen(src) - 1;
-
-    // Удаляем "if" и пробелы
     while (*start && !(*start == '(')) start++;
     if (*start != '(') return NULL;
-
-    // Сдвиг на первую (
     start++;
-
-    // Сдвиг к последней )
     while (end > start && *end != ')') end--;
     if (end <= start) return NULL;
-
-    // Пропускаем внешние скобки ещё раз (если их много)
     while (*start == '(' && *(end - 1) == ')') {
         start++;
         end--;

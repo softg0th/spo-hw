@@ -34,8 +34,6 @@ char* allocTemp() {
 
 char* processParseTreeAndGenerateIR(struct parseTree *pt) {
     if (!pt) return NULL;
-    //printf("[IR] visiting node: %s\n", pt->name);
-
 
     if (!pt->left && !pt->right) {
         return strdup(pt->name);
@@ -89,6 +87,18 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
 
 void processCondExpression(const char* exprStr, const char* labelIfFalse) {
     char lhs[64] = {0}, rhs[64] = {0}, op[8] = {0};
+
+    if (!exprStr) {
+        emit_jump(labelIfFalse);
+        return;
+    }
+
+    if (strlen(exprStr) == 0 || !strpbrk(exprStr, "=!<>")) {
+        if (atoi(exprStr) == 0) {
+            emit_jump(labelIfFalse);
+        }
+        return;
+    }
     splitCondExpr(exprStr, lhs, op, rhs);
 
     emit_mov("r1", rhs);
@@ -110,12 +120,42 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
 
 }
 
-void processWhileExpression(const char* exprStr) {
+char* extractExprFromParseTree(struct parseTree* pt) {
+    if (!pt) return strdup("0");
 
+    if (!pt->left && !pt->right) {
+        return strdup(pt->name);
+    }
+
+    const char* op = NULL;
+    if (strcmp(pt->name, "OP_GT") == 0) op = ">";
+    else if (strcmp(pt->name, "OP_LT") == 0) op = "<";
+    else if (strcmp(pt->name, "OP_EQ") == 0) op = "==";
+    else if (strcmp(pt->name, "OP_NEQ") == 0) op = "!=";
+    else if (strcmp(pt->name, "OP_ADD") == 0) op = "+";
+    else if (strcmp(pt->name, "OP_SUB") == 0) op = "-";
+    else if (strcmp(pt->name, "OP_MUL") == 0) op = "*";
+    else if (strcmp(pt->name, "OP_DIV") == 0) op = "/";
+    else if (strcmp(pt->name, "OP_ASSIGN") == 0) op = "=";
+
+    if (op && pt->left && pt->right) {
+        char* lhs = extractExprFromParseTree(pt->left);
+        char* rhs = extractExprFromParseTree(pt->right);
+        char* buf = malloc(strlen(lhs) + strlen(rhs) + strlen(op) + 4);
+        sprintf(buf, "%s%s%s", lhs, op, rhs);
+        free(lhs); free(rhs);
+        return buf;
+    }
+
+    printf("[extractExpr] WARNING: unhandled node '%s'\n", pt->name);
+    return strdup("BAD_EXPR");
 }
 
 void generateIRFromCFGNode(struct cfgNode* node) {
     if (!node || !node->name) return;
+    if (node->visited) return;
+
+    node->visited = true;
 
     if (isCond(node->name)) {
         char* condExpr = extractToken(node->name);
@@ -140,17 +180,50 @@ void generateIRFromCFGNode(struct cfgNode* node) {
     }
 
     if (isWhile(node->name)) {
-        char* whileExpr = extractToken(node->name);
+        if (node->name && strcmp(node->name, "while_body") == 0) {
+            return;
+        }
+
+        printf(">> while node ID: %d, name: %s\n", node->id, node->name);
+        if (!node->parseTree) {
+            printf("No parseTree in while\n");
+            return;
+        }
+
+        printf("[while] loopRoot: %s\n", node->parseTree->name);
+        if (node->parseTree->left)
+            printf("[while] left: %s\n", node->parseTree->left->name);
+        if (node->parseTree->right)
+            printf("[while] right: %s\n", node->parseTree->right->name);
+
         char* labelCond = allocLoopLabel(1);
-        char* labelEnd = allocLoopLabel(2);
+        char* labelExit = allocLoopLabel(2);
 
+        emit_label(labelCond);
 
+        char* exprStr = extractExprFromParseTree(node->parseTree);
+        printf("[while] Extracted expr: %s\n", exprStr);
+
+        processCondExpression(exprStr, labelExit);
+
+        if (node->conditionalBranch)
+            generateIRFromCFGNode(node->conditionalBranch);
+
+        emit_jump(labelCond);
+        emit_label(labelExit);
+        return;
     }
 
-    if (node->isParseTreeRoot) {
+    if (node->isParseTreeRoot && node->parseTree) {
         processParseTreeAndGenerateIR(node->parseTree);
     }
+
+    if (node->conditionalBranch)
+        generateIRFromCFGNode(node->conditionalBranch);
+    if (node->defaultBranch)
+        generateIRFromCFGNode(node->defaultBranch);
 }
+
 
 void collectGraphNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *count) {
     if (!node) return;

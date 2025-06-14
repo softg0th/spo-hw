@@ -10,6 +10,7 @@ struct cfgNode {
     struct astNode* ast;
     struct cfgNode* conditionalBranch;
     struct cfgNode* defaultBranch;
+    bool visited;
     bool isTraversed;
     bool isProcessed;
     bool isParsed;

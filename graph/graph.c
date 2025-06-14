@@ -45,6 +45,7 @@ static void addError(struct errorList **elist, const char *msg)
     }
 }
 
+
 static void printErrors(const struct errorList *elist)
 {
     if (!elist) return;
@@ -99,13 +100,13 @@ char* generateBinopName(pANTLR3_BASE_TREE tree) {
 
     const char* binaryOps[] = {
         "+", "-", "*", "/", "%", "<<", ">>", "&", "^", "|",
-        "="
+        "=", "==", "!=", ">", "<"
     };
 
     const char* binopNames[] = {
         "OP_ADD", "OP_SUB", "OP_MUL", "OP_DIV", "OP_MOD",
         "OP_LSHIFT", "BINOP_RSHIFT", "BINOP_AND", "OP_XOR", "OP_OR",
-        "OP_ASSIGN"
+        "OP_ASSIGN", "OP_EQ", "OP_NEQ", "OP_GT", "OP_LT"
     };
 
     size_t opsCount = sizeof(binaryOps) / sizeof(binaryOps[0]);
@@ -127,8 +128,9 @@ bool isOperation(pANTLR3_BASE_TREE tree) {
 
     const char* binaryOps[] = {
         "+", "-", "*", "/", "%", "<<", ">>", "&", "^", "|",
-        "="
+        "=", "==", "!=", ">", "<"
     };
+
     for (size_t i = 0; i < sizeof(binaryOps) / sizeof(binaryOps[0]); ++i) {
         if (strcmp(nodeName, binaryOps[i]) == 0) {
             return true;
@@ -136,6 +138,38 @@ bool isOperation(pANTLR3_BASE_TREE tree) {
     }
     return false;
 }
+
+struct parseTree *buildParseTreeForExpression(pANTLR3_BASE_TREE expr)
+{
+    if (!expr) return NULL;
+
+    const char* name = expr->toString(expr)->chars;
+
+    if (strcmp(name, "ExpressionToken") == 0 || strcmp(name, "Body") == 0) {
+        if (expr->getChildCount(expr) == 1) {
+            return buildParseTreeForExpression(expr->getChild(expr, 0));
+        }
+    }
+
+    if (isOperation(expr)) {
+        struct parseTree *opNode = calloc(1, sizeof(struct parseTree));
+        char *opName = generateBinopName(expr);
+        opNode->name = opName ? opName : safeStrdup("op");
+
+        if (expr->getChildCount(expr) == 2) {
+            opNode->left  = buildParseTreeForExpression(expr->getChild(expr,0));
+            opNode->right = buildParseTreeForExpression(expr->getChild(expr,1));
+        }
+        return opNode;
+    }
+
+    struct parseTree *leaf = calloc(1, sizeof(struct parseTree));
+    pANTLR3_STRING s = expr->toString(expr);
+    const char *txt = (s && s->chars) ? s->chars : "";
+    leaf->name = safeStrdup(txt);
+    return leaf;
+}
+
 
  struct cfgNode *tempParentNode;
 
@@ -326,6 +360,7 @@ static void processLoop(pANTLR3_BASE_TREE loopTree, struct context *ctx) {
 
     if (exprChild) {
         getExpressionString(exprChild, exprBuf, sizeof(exprBuf));
+        loopNode->parseTree = buildParseTreeForExpression(exprChild);
     }
     if (exprBuf[0]) {
         char tmp[300];
@@ -461,32 +496,6 @@ static bool isTrivialNode(const char* n) {
 }
 */
 
-struct parseTree *buildParseTreeForExpression(pANTLR3_BASE_TREE expr)
-{
-    if (!expr) return NULL;
-
-    if (isOperation(expr)) {
-        struct parseTree *opNode = calloc(1, sizeof(struct parseTree));
-        char *opName = generateBinopName(expr);
-        if (!opName) {
-            opName = safeStrdup("op");
-        }
-        opNode->name = opName;
-
-        if (expr->getChildCount(expr) == 2) {
-            opNode->left  = buildParseTreeForExpression(expr->getChild(expr,0));
-            opNode->right = buildParseTreeForExpression(expr->getChild(expr,1));
-        }
-        return opNode;
-    }
-    else {
-        struct parseTree *leaf = calloc(1, sizeof(struct parseTree));
-        pANTLR3_STRING s = expr->toString(expr);
-        const char *txt = (s && s->chars) ? s->chars : "";
-        leaf->name = safeStrdup(txt);
-        return leaf;
-    }
-}
 
 struct parseTree *buildAssignParseTree(pANTLR3_BASE_TREE varDecl)
 {

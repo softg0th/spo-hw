@@ -3,22 +3,6 @@
 #include <stdlib.h>
 #include <ctype.h>
 
-bool isInterestingNode(char* nodeName) {
-    if (strcmp(nodeName, "FuncSignatureToken") == 0) {
-        return false;
-    }
-    if (strcmp(nodeName, "Identifier") == 0) {
-        return false;
-    }
-    if (strcmp(nodeName, "ArgListToken") == 0) {
-        return false;
-    }
-    if (strcmp(nodeName, "Body") == 0) {
-        return false;
-    }
-    return true;
-}
-
 bool isCond(const char* node) {
     if (!node) return false;
 
@@ -32,14 +16,22 @@ bool isCond(const char* node) {
     return *node == '(';
 }
 
-bool isWhile(const char* node) {
-    if (!node) return false;
-
-    if (node[0] != 'w' || node[4] != 'e') return false;
-
-    while (isspace(*node)) node++;
-    return *node == '(';
+bool isWhile(char* name) {
+    return strcmp(name, "while") == 0;
 }
+
+bool isInterestingNode(char* nodeName) {
+    if (strcmp(nodeName, "FuncSignatureToken") == 0) return false;
+    if (strcmp(nodeName, "Identifier") == 0) return false;
+    if (strcmp(nodeName, "ArgListToken") == 0) return false;
+    if (strcmp(nodeName, "Body") == 0) return false;
+
+    if (isCond(nodeName)) return true;
+    if (isWhile(nodeName)) return true;
+
+    return false;
+}
+
 
 char* extractToken(const char* src) {
     const char* start = src;
@@ -84,11 +76,17 @@ void splitCondExpr(const char* expr, char* lhs, char* op, char* rhs) {
     while (*p && !strchr("=!<>", *p)) *lhs_ptr++ = *p++;
     *lhs_ptr = '\0';
 
-    if (*p == '=' && *(p+1) == '=') {
+    if (*p == '=' && *(p + 1) == '=') {
         strcpy(op, "==");
         p += 2;
-    } else if (*p == '!' && *(p+1) == '=') {
+    } else if (*p == '!' && *(p + 1) == '=') {
         strcpy(op, "!=");
+        p += 2;
+    } else if (*p == '>' && *(p + 1) == '=') {
+        strcpy(op, ">=");
+        p += 2;
+    } else if (*p == '<' && *(p + 1) == '=') {
+        strcpy(op, "<=");
         p += 2;
     } else if (*p == '>') {
         strcpy(op, ">");
@@ -97,11 +95,12 @@ void splitCondExpr(const char* expr, char* lhs, char* op, char* rhs) {
         strcpy(op, "<");
         p++;
     } else {
-        strcpy(op, "?");
+        strcpy(op, "");
+        lhs[0] = rhs[0] = '\0';
+        return;
     }
 
-    strcpy(rhs_buf, p);
-
+    strncpy(rhs_buf, p, sizeof(rhs_buf) - 1);
     trim(lhs_buf);
     trim(rhs_buf);
     strcpy(lhs, lhs_buf);

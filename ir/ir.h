@@ -31,3 +31,6 @@ void emit_jump(char* label);
 void emit_cond_jump_false(char* cond, char* label);
 void emit_jumpgt(const char* cond, const char* label);
 void emit_jumplt(const char* cond, const char* label);
+void emit_load(const char* ptr, const char* to);
+void emit_store(const char* from, const char* ptr);
+void emit_ret();

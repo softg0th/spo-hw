@@ -20,6 +20,11 @@ bool isWhile(char* name) {
     return strcmp(name, "while") == 0;
 }
 
+bool isReturnNode(const char* s) {
+    if (!s) return false;
+    return strncmp(s, "return", 6) == 0 || strncmp(s, "Return", 6) == 0;
+}
+
 bool isInterestingNode(char* nodeName) {
     if (strcmp(nodeName, "FuncSignatureToken") == 0) return false;
     if (strcmp(nodeName, "Identifier") == 0) return false;

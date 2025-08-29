@@ -55,15 +55,36 @@ void generateASM(IRInstruction** pool, int count) {
                 fprintf(asmFile, "%s:\n", instr->dst);
                 break;
             case IR_NEG:
+                fprintf(asmFile, "neg %s, %s\n", instr->src1, instr->dst);
+                break;
             case IR_NOT:
+                fprintf(asmFile, "_not %s, %s\n", instr->src1, instr->dst);
+                break;
             case IR_AND:
+                fprintf(asmFile, "mov %s, %s\n", instr->dst, instr->src1);
+                fprintf(asmFile, "_and %s, %s\n", instr->dst, instr->src2);
+                break;
             case IR_OR:
+                fprintf(asmFile, "mov %s, %s\n", instr->dst, instr->src1);
+                fprintf(asmFile, "_or %s, %s\n", instr->dst, instr->src2);
+                break;
             case IR_LOAD:
+                fprintf(asmFile, "load %s, %s\n", instr->src1, instr->dst);
+                break;
             case IR_STORE:
+                fprintf(asmFile, "store %s, %s\n", instr->src1, instr->dst);
+                break;
             case IR_PUSH:
+                fprintf(asmFile, "push %s\n", instr->src1);
+                break;
             case IR_POP:
+                fprintf(asmFile, "pop %s\n", instr->dst);
+                break;
             case IR_CALL:
+                fprintf(asmFile, "call %s\n", instr->src1);
+                break;
             case IR_RET:
+                fprintf(asmFile, "ret\n");
                 break;
             default:
                 fprintf(stderr, "Unknown IR opcode: %d\n", instr->op);

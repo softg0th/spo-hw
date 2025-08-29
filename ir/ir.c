@@ -40,26 +40,26 @@ char* allocLoopLabel(int state) {
 }
 
 void emit_ir(IROpcodes op, const char* dst, const char* src1, const char* src2) {
-    if (irCount >= IR_CAPACITY) {
-        handleError(1, NULL);
-    }
+    if (irCount >= IR_CAPACITY) handleError(1, NULL);
 
     IRInstruction* instr = malloc(sizeof(IRInstruction));
-    if (!instr) {
-        handleError(3, NULL);
-    }
+    if (!instr) handleError(3, NULL);
 
     instr->op = op;
-    instr->dst = dst ? strdup(dst) : NULL;
+    instr->dst  = dst  ? strdup(dst)  : NULL;
     instr->src1 = src1 ? strdup(src1) : NULL;
     instr->src2 = src2 ? strdup(src2) : NULL;
 
     irPool[irCount++] = instr;
+
+    // ВРЕМЕННО:
+    printf("[IR] op=%d dst=%s src1=%s src2=%s count=%d\n",
+           op, instr->dst?instr->dst:"-", instr->src1?instr->src1:"-",
+           instr->src2?instr->src2:"-", irCount);
 }
 
 
 void emit_add(const char* dst, const char* lhs, const char* rhs) {
-    printf("%s%s%s\n", dst, lhs, rhs);
     emit_ir(IR_ADD, dst, lhs, rhs);
 }
 
@@ -80,7 +80,6 @@ void emit_rem(const char* dst, const char* lhs, const char* rhs) {
 }
 
 void emit_mov(const char* dst, const char* src) {
-    printf("%s%s\n", dst, src);
     emit_ir(IR_MOV, dst, src, NULL);
 }
 
@@ -97,9 +96,21 @@ void emit_cond_jump_false(char* cond, char* label) {
 }
 
 void emit_jumpgt(const char* cond, const char* label) {
-    emit_ir(IR_JGT, cond, label, NULL);
+    emit_ir(IR_JGT, cond,NULL,label);
 }
 
 void emit_jumplt(const char* cond, const char* label) {
-    emit_ir(IR_JLT, cond, label, NULL);
+    emit_ir(IR_JLT, cond,NULL,  label);
+}
+
+void emit_load(const char* ptr, const char* to) {
+    emit_ir(IR_LOAD, to, ptr, NULL);
+}
+
+void emit_store(const char* from, const char* ptr) {
+    emit_ir(IR_STORE, ptr, from, NULL);
+}
+
+void emit_ret() {
+    emit_ir(IR_RET, NULL, NULL, NULL);
 }

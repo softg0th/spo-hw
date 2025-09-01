@@ -259,10 +259,12 @@ static void getExpressionString(pANTLR3_BASE_TREE tree, char* buf, size_t sz) {
         }
     }
     else if (cc==2 && (
-             !strcmp(nm,"==")||!strcmp(nm,"!=")||
-             !strcmp(nm,"+") ||!strcmp(nm,"-")  ||
-             !strcmp(nm,"*") ||!strcmp(nm,"/")  ||
-             !strcmp(nm,"%")))
+     !strcmp(nm,"==")||!strcmp(nm,"!=")||
+     !strcmp(nm,"<") ||!strcmp(nm,">")  ||
+     !strcmp(nm,"<=")||!strcmp(nm,">=") ||
+     !strcmp(nm,"+") ||!strcmp(nm,"-")  ||
+     !strcmp(nm,"*") ||!strcmp(nm,"/")  ||
+     !strcmp(nm,"%")))
     {
         strcat(buf,"(");
         getExpressionString(tree->getChild(tree,0), buf, sz);
@@ -334,6 +336,9 @@ static void processConditional(pANTLR3_BASE_TREE ifTree, struct context *ctx) {
         if (!ifNode->defaultBranch) {
             ifNode->defaultBranch = endIf;
         }
+    }
+    if (exprChild) {
+        ifNode->parseTree = buildParseTreeForExpression(exprChild);
     }
     ctx->curr = endIf;
 }

@@ -329,6 +329,59 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
     return NULL;
 }
 
+// Structural lowering for simple conditions (comparison parseTree nodes)
+static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFalse) {
+    if (!pt || !pt->name) return false;
+    const char* tag = pt->name;
+
+    // We only handle binary comparison nodes here.
+    if (strcmp(tag, "OP_EQ") == 0 ||
+        strcmp(tag, "OP_NEQ") == 0 ||
+        strcmp(tag, "OP_LT") == 0 ||
+        strcmp(tag, "OP_GT") == 0 ||
+        strcmp(tag, "OP_LE") == 0 ||
+        strcmp(tag, "OP_GE") == 0) {
+
+        struct parseTree* L = unwrapExpr(pt->left);
+        struct parseTree* R = unwrapExpr(pt->right);
+
+        // Evaluate both sides to atoms (register/temp/immediate)
+        char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
+        char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
+
+        // Compute lhs - rhs into a fresh temp (do NOT use r0)
+        char* tcond = allocTemp();
+        emit_sub(tcond, lhs, rhs);
+
+        if (strcmp(tag, "OP_EQ") == 0) {
+            // false when tcond != 0
+            emit_jumpgt(tcond, labelIfFalse);
+            emit_jumplt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_NEQ") == 0) {
+            // false when tcond == 0
+            emit_cond_jump_false(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_GT") == 0) {
+            // false when tcond <= 0  → (==0) or (<0)
+            emit_cond_jump_false(tcond, labelIfFalse);
+            emit_jumplt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_LT") == 0) {
+            // false when tcond >= 0  → (==0) or (>0)
+            emit_cond_jump_false(tcond, labelIfFalse);
+            emit_jumpgt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_GE") == 0) {
+            // false when tcond < 0
+            emit_jumplt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_LE") == 0) {
+            // false when tcond > 0
+            emit_jumpgt(tcond, labelIfFalse);
+        }
+
+        return true;
+        }
+
+    return false;
+}
+
 void processCondExpression(const char* exprStr, const char* labelIfFalse) {
     char lhs[64] = {0}, rhs[64] = {0}, op[8] = {0};
     if (!exprStr) {
@@ -353,8 +406,9 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
         }
         // Treat as "if (atom)"; jump when atom == 0
         char* atom = resolveLeafAtom(exprStr);
-        emit_mov("r0", atom);
-        emit_cond_jump_false("r0", labelIfFalse);
+        char* tcond = allocTemp();
+        emit_mov(tcond, atom);
+        emit_cond_jump_false(tcond, labelIfFalse);
         free(atom);
         return;
     }
@@ -365,37 +419,29 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
 
     char* tmp = allocTemp();
     emit_mov(tmp, rhsAtom);
-    emit_sub("r0", lhsAtom, tmp);
+    char* tcond = allocTemp();
+    emit_sub(tcond, lhsAtom, tmp);
     free(lhsAtom);
     free(rhsAtom);
 
-
     if (strcmp(op, "==") == 0) {
-        // false when r0 != 0  → (r0 > 0) or (r0 < 0)
-        emit_jumpgt("r0", labelIfFalse);
-        emit_jumplt("r0", labelIfFalse);
+        emit_jumpgt(tcond, labelIfFalse);
+        emit_jumplt(tcond, labelIfFalse);
     } else if (strcmp(op, "!=") == 0) {
-        // false when r0 == 0
-        emit_cond_jump_false("r0", labelIfFalse);
+        emit_cond_jump_false(tcond, labelIfFalse);
     } else if (strcmp(op, ">") == 0) {
-        // false when r0 <= 0  → (r0 == 0) or (r0 < 0)
-        emit_cond_jump_false("r0", labelIfFalse);
-        emit_jumplt("r0", labelIfFalse);
+        emit_cond_jump_false(tcond, labelIfFalse);
+        emit_jumplt(tcond, labelIfFalse);
     } else if (strcmp(op, "<") == 0) {
-        // false when r0 >= 0  → (r0 == 0) or (r0 > 0)
-        emit_cond_jump_false("r0", labelIfFalse);
-        emit_jumpgt("r0", labelIfFalse);
+        emit_cond_jump_false(tcond, labelIfFalse);
+        emit_jumpgt(tcond, labelIfFalse);
     } else if (strcmp(op, ">=") == 0) {
-        // false when r0 < 0
-        emit_jumplt("r0", labelIfFalse);
+        emit_jumplt(tcond, labelIfFalse);
     } else if (strcmp(op, "<=") == 0) {
-        // false when r0 > 0
-        emit_jumpgt("r0", labelIfFalse);
+        emit_jumpgt(tcond, labelIfFalse);
     } else {
-        // truthy-проверка: false when r0 == 0
-        emit_cond_jump_false("r0", labelIfFalse);
+        emit_cond_jump_false(tcond, labelIfFalse);
     }
-
 }
 
 char* extractExprFromParseTree(struct parseTree* pt) {
@@ -487,13 +533,19 @@ void generateIRFromCFGNode(struct cfgNode* node) {
             condTree = unwrapExpr(node->parseTree);
         }
 
-        char* condExpr = condTree ? extractExprFromParseTree(condTree)
-                                  : extractToken(node->name);
         char* L_else = allocLabel();
         char* L_end  = allocLabel();
 
-        // 3) если условие ложно → прыжок в else, иначе падение в then
-        processCondExpression(condExpr, L_else);
+        // Prefer structural lowering (no fragile string parsing)
+        bool lowered = false;
+        if (condTree) {
+            lowered = lowerCondFromParseTree(condTree, L_else);
+        }
+        if (!lowered) {
+            char* condExpr = condTree ? extractExprFromParseTree(condTree)
+                                      : extractToken(node->name);
+            processCondExpression(condExpr, L_else);
+        }
 
         // ---- THEN ----
         if (node->conditionalBranch)
@@ -533,10 +585,11 @@ void generateIRFromCFGNode(struct cfgNode* node) {
         emit_label(labelCond);
 
         struct parseTree* condTree = unwrapExpr(node->parseTree);
-        char* exprStr = extractExprFromParseTree(condTree);
-        printf("[while] Extracted expr: %s\n", exprStr);
-
-        processCondExpression(exprStr, labelExit);
+        if (!lowerCondFromParseTree(condTree, labelExit)) {
+            char* exprStr = extractExprFromParseTree(condTree);
+            printf("[while] Extracted expr: %s\n", exprStr);
+            processCondExpression(exprStr, labelExit);
+        }
 
         if (node->conditionalBranch)
             generateIRFromCFGNode(node->conditionalBranch);
@@ -596,60 +649,6 @@ void traverseGraph(struct programGraph *graph) {
         checkFullGraph(graph->functions[i]);
     }
 }
-
-// Structural lowering for simple conditions (comparison parseTree nodes)
-static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFalse) {
-    if (!pt || !pt->name) return false;
-    const char* tag = pt->name;
-
-    // We only handle binary comparison nodes here.
-    if (strcmp(tag, "OP_EQ") == 0 ||
-        strcmp(tag, "OP_NEQ") == 0 ||
-        strcmp(tag, "OP_LT") == 0 ||
-        strcmp(tag, "OP_GT") == 0 ||
-        strcmp(tag, "OP_LE") == 0 ||
-        strcmp(tag, "OP_GE") == 0) {
-
-        struct parseTree* L = unwrapExpr(pt->left);
-        struct parseTree* R = unwrapExpr(pt->right);
-
-        // Evaluate both sides to atoms (register/temp/immediate)
-        char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
-        char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
-
-        // Compute lhs - rhs into a fresh temp (do NOT use r0)
-        char* tcond = allocTemp();
-        emit_sub(tcond, lhs, rhs);
-
-        if (strcmp(tag, "OP_EQ") == 0) {
-            // false when tcond != 0
-            emit_jumpgt(tcond, labelIfFalse);
-            emit_jumplt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_NEQ") == 0) {
-            // false when tcond == 0
-            emit_cond_jump_false(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_GT") == 0) {
-            // false when tcond <= 0  → (==0) or (<0)
-            emit_cond_jump_false(tcond, labelIfFalse);
-            emit_jumplt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_LT") == 0) {
-            // false when tcond >= 0  → (==0) or (>0)
-            emit_cond_jump_false(tcond, labelIfFalse);
-            emit_jumpgt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_GE") == 0) {
-            // false when tcond < 0
-            emit_jumplt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_LE") == 0) {
-            // false when tcond > 0
-            emit_jumpgt(tcond, labelIfFalse);
-        }
-
-        return true;
-        }
-
-    return false;
-}
-
 
 void compile(pANTLR3_BASE_TREE* tree, struct programGraph *graph) {
     symbolTable* symTable = processTreeToBuild(tree);

@@ -114,3 +114,7 @@ void emit_store(const char* from, const char* ptr) {
 void emit_ret() {
     emit_ir(IR_RET, NULL, NULL, NULL);
 }
+
+void emit_call(const char* fname) {
+    emit_ir(IR_CALL, NULL, fname, NULL);
+}

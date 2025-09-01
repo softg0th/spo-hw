@@ -34,3 +34,4 @@ void emit_jumplt(const char* cond, const char* label);
 void emit_load(const char* ptr, const char* to);
 void emit_store(const char* from, const char* ptr);
 void emit_ret();
+void emit_call(const char* fname);

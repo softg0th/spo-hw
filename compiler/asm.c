@@ -1,19 +1,32 @@
 #include <stdio.h>
-
+#include <string.h>
 #include "asm.h"
 
-void generateASM(IRInstruction** pool, int count) {
+void generateASM(IRInstruction **pool, int count) {
     FILE *asmFile = fopen("out.asm", "w");
     if (!asmFile) {
         fprintf(stderr, "Failed to open output file\n");
         return;
     }
 
+    const char *entryLabel = NULL;
+    for (int i = 0; i < count; ++i) {
+        IRInstruction *ins = pool[i];
+        if (ins && ins->op == IR_LABEL) {
+            if (!entryLabel) entryLabel = ins->dst;
+            if (ins->dst && strcmp(ins->dst, "main") == 0) {
+                entryLabel = ins->dst;
+                break;
+            }
+        }
+    }
+    if (!entryLabel) entryLabel = "start";
+
     fprintf(asmFile, "[section code_ram]\n");
-    fprintf(asmFile, "\tjump start\n\nstart:\n");
+    fprintf(asmFile, "\tjump %s\n\n", entryLabel);
 
     for (int i = 0; i < count; ++i) {
-        IRInstruction* instr = pool[i];
+        IRInstruction *instr = pool[i];
         switch (instr->op) {
             case IR_MOV:
                 printf("mov %s, %s\n", instr->dst, instr->src1);

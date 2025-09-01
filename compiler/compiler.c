@@ -8,6 +8,37 @@
 symbolTable* globalSymTable;
 extern int irCount;
 
+typedef struct { char* name; int addr; } LocalSym;
+static LocalSym gLocalSyms[1024];
+static int gLocalSymCount = 0;
+
+static void locals_reset(void) {
+    for (int i = 0; i < gLocalSymCount; ++i) {
+        free(gLocalSyms[i].name);
+    }
+    gLocalSymCount = 0;
+}
+
+static bool locals_lookup(const char* name, int* outAddr) {
+    if (!name) return false;
+    for (int i = 0; i < gLocalSymCount; ++i) {
+        if (strcmp(gLocalSyms[i].name, name) == 0) {
+            if (outAddr) *outAddr = gLocalSyms[i].addr;
+            return true;
+        }
+    }
+    return false;
+}
+
+static void locals_insert(const char* name, int addr) {
+    if (!name) return;
+    if (gLocalSymCount < (int)(sizeof(gLocalSyms)/sizeof(gLocalSyms[0]))) {
+        gLocalSyms[gLocalSymCount].name = strdup(name);
+        gLocalSyms[gLocalSymCount].addr = addr;
+        ++gLocalSymCount;
+    }
+}
+
 
 static bool isOperation(char* ptName) {
     const char* binaryOps[] = {
@@ -94,6 +125,20 @@ static char* resolveLeafAtom(const char* name) {
         }
     }
 
+    // try local fallback map
+    if (locals_lookup(name, &addr)) {
+        const char* r = regByAddr(addr);
+        if (r) {
+            return strdup(r);
+        } else if (addr > 0) {
+            char* tmp = allocTemp();
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%d", addr);
+            emit_load(strdup(buf), tmp);
+            return tmp;
+        }
+    }
+
     return strdup(name);
 }
 
@@ -121,6 +166,17 @@ static char* resolveLValueName(struct parseTree* node) {
             return strdup(r);
         }
         return name;
+    } else {
+        // if not found in global table, check local fallback map
+        if (locals_lookup(name, &addr)) {
+            const char* r = regByAddr(addr);
+            if (r) {
+                free(name);
+                return strdup(r);
+            }
+            // keep the plain name; the caller will compute/store by address
+            return name;
+        }
     }
     return name;
 }
@@ -145,11 +201,11 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         char* rhs     = exprNode ? processParseTreeAndGenerateIR(exprNode) : strdup("0");
 
         int addr = 0;
-        bool haveAddr = findSymbolAddressByName(globalSymTable, varName, &addr);
-        if (!haveAddr || addr <= 0) {
-            if (!insertSymbolAddress(globalSymTable, varName, nextFreeAddress)) exit(1);
+        // Locals-only allocation: don't touch the global symbol table for local vars
+        if (!locals_lookup(varName, &addr)) {
             addr = nextFreeAddress;
             nextFreeAddress += 2;
+            locals_insert(varName, addr);
         }
 
         char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
@@ -157,6 +213,46 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         emit_store(rhs, strdup(buf));  // store rhs -> [addr]
         free(varName);
         return NULL;
+    }
+
+    if (strcmp(pt->name, "CallToken") == 0) {
+        struct parseTree* id = pt->left;
+        const char* fname = (id && id->name) ? id->name : NULL;
+        struct parseTree* args = pt->right;
+
+        char* argv[4] = {0};
+        int argc = 0;
+
+        // Flatten up to 4 arguments from a binary tree/list node using an explicit stack
+        struct parseTree* stack[32];
+        int top = 0;
+        if (args) stack[top++] = args;
+
+        while (top > 0 && argc < 4) {
+            struct parseTree* n = stack[--top];
+            if (!n) continue;
+
+            if (n->name && (strcmp(n->name, "ExpressionListToken") == 0 ||
+                            strcmp(n->name, "ExpressionList") == 0)) {
+                // push right then left to evaluate left-to-right
+                if (n->right) stack[top++] = n->right;
+                if (n->left)  stack[top++] = n->left;
+                continue;
+                            }
+
+            // treat this subtree as one expression argument
+            argv[argc++] = processParseTreeAndGenerateIR(n);
+        }
+
+        if (argc > 0) emit_mov("r0", argv[0]);
+        if (argc > 1) emit_mov("r1", argv[1]);
+        if (argc > 2) emit_mov("r2", argv[2]);
+        if (argc > 3) emit_mov("r3", argv[3]);
+
+        emit_call(fname);
+        char* tmp = allocTemp();
+        emit_mov(tmp, "r0");
+        return tmp;
     }
 
     if (strcmp(pt->name, "ReturnToken") == 0 ||
@@ -182,28 +278,24 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
             char* dst = resolveLValueName(pt->left);
             char* rhs = processParseTreeAndGenerateIR(pt->right);
 
-            // If destination is a hardware register (parameter), simple MOV is fine
-            if (isRegName(dst)) {
+            if (isRegName(dst)) {          // r0..r3 (параметры)
                 emit_mov(dst, rhs);
                 return NULL;
             }
 
-            int addr = -999999;
-            bool haveAddr = findSymbolAddressByName(globalSymTable, dst, &addr);
-            if (!haveAddr || addr <= 0) {
-                bool success = insertSymbolAddress(globalSymTable, dst, nextFreeAddress);
-                if (!success) {
-                    exit(1);
+            int addr;
+            if (!findSymbolAddressByName(globalSymTable, dst, &addr)) {
+                if (!locals_lookup(dst, &addr)) {
+                    addr = nextFreeAddress;
+                    nextFreeAddress += 2;
+                    locals_insert(dst, addr);
                 }
-                addr = nextFreeAddress;
-                nextFreeAddress += 2;
             }
+            // если нашли в глобальной — addr уже задан и мы его используем
 
             char buf[32];
             snprintf(buf, sizeof(buf), "%d", addr);
-            char* addrStr = strdup(buf);
-            printf("[STORE] from=%s ptr=%s\n", rhs, addrStr);
-            emit_store(rhs, addrStr);
+            emit_store(rhs, strdup(buf));
             return NULL;
         }
 
@@ -244,10 +336,26 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
         return;
     }
 
-    if (strlen(exprStr) == 0 || !strpbrk(exprStr, "=!<>")) {
-        if (atoi(exprStr) == 0) {
-            emit_jump(labelIfFalse);
+    if (strlen(exprStr) == 0) {
+        emit_jump(labelIfFalse);
+        return;
+    }
+    // If there's no relational operator, handle as a constant or truthy check on an atom
+    if (!strpbrk(exprStr, "=!<>")) {
+        char* endptr = NULL;
+        long v = strtol(exprStr, &endptr, 10);
+        // Pure numeric literal
+        if (endptr && *endptr == '\0') {
+            if (v == 0) {
+                emit_jump(labelIfFalse);
+            }
+            return;
         }
+        // Treat as "if (atom)"; jump when atom == 0
+        char* atom = resolveLeafAtom(exprStr);
+        emit_mov("r0", atom);
+        emit_cond_jump_false("r0", labelIfFalse);
+        free(atom);
         return;
     }
     splitCondExpr(exprStr, lhs, op, rhs);
@@ -255,29 +363,48 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
     char* lhsAtom = resolveLeafAtom(lhs);
     char* rhsAtom = resolveLeafAtom(rhs);
 
-    emit_mov("r1", rhsAtom);
-    emit_sub("r0", lhsAtom, "r1");
+    char* tmp = allocTemp();
+    emit_mov(tmp, rhsAtom);
+    emit_sub("r0", lhsAtom, tmp);
     free(lhsAtom);
     free(rhsAtom);
 
 
     if (strcmp(op, "==") == 0) {
-        emit_cond_jump_false("r0", labelIfFalse);
-    } else if (strcmp(op, "!=") == 0) {
-        char* labelSkip = allocLabel();
-        emit_cond_jump_false("r0", labelSkip);
-        emit_jump(labelIfFalse);
-        emit_label(labelSkip);
-    } else if (strcmp(op, ">") == 0) {
+        // false when r0 != 0  → (r0 > 0) or (r0 < 0)
         emit_jumpgt("r0", labelIfFalse);
-    } else if (strcmp(op, "<") == 0) {
         emit_jumplt("r0", labelIfFalse);
+    } else if (strcmp(op, "!=") == 0) {
+        // false when r0 == 0
+        emit_cond_jump_false("r0", labelIfFalse);
+    } else if (strcmp(op, ">") == 0) {
+        // false when r0 <= 0  → (r0 == 0) or (r0 < 0)
+        emit_cond_jump_false("r0", labelIfFalse);
+        emit_jumplt("r0", labelIfFalse);
+    } else if (strcmp(op, "<") == 0) {
+        // false when r0 >= 0  → (r0 == 0) or (r0 > 0)
+        emit_cond_jump_false("r0", labelIfFalse);
+        emit_jumpgt("r0", labelIfFalse);
+    } else if (strcmp(op, ">=") == 0) {
+        // false when r0 < 0
+        emit_jumplt("r0", labelIfFalse);
+    } else if (strcmp(op, "<=") == 0) {
+        // false when r0 > 0
+        emit_jumpgt("r0", labelIfFalse);
+    } else {
+        // truthy-проверка: false when r0 == 0
+        emit_cond_jump_false("r0", labelIfFalse);
     }
 
 }
 
 char* extractExprFromParseTree(struct parseTree* pt) {
     if (!pt) return strdup("0");
+
+    if (strcmp(pt->name, "ExpressionToken") == 0 || strcmp(pt->name, "Expression") == 0) {
+        struct parseTree* child = pt->left ? pt->left : pt->right;
+        return extractExprFromParseTree(child);
+    }
 
     if (!pt->left && !pt->right) {
         return strdup(pt->name);
@@ -288,6 +415,8 @@ char* extractExprFromParseTree(struct parseTree* pt) {
     else if (strcmp(pt->name, "OP_LT") == 0) op = "<";
     else if (strcmp(pt->name, "OP_EQ") == 0) op = "==";
     else if (strcmp(pt->name, "OP_NEQ") == 0) op = "!=";
+    else if (strcmp(pt->name, "OP_GE") == 0) op = ">=";
+    else if (strcmp(pt->name, "OP_LE") == 0) op = "<=";
     else if (strcmp(pt->name, "OP_ADD") == 0) op = "+";
     else if (strcmp(pt->name, "OP_SUB") == 0) op = "-";
     else if (strcmp(pt->name, "OP_MUL") == 0) op = "*";
@@ -307,6 +436,30 @@ char* extractExprFromParseTree(struct parseTree* pt) {
     return strdup("BAD_EXPR");
 }
 
+// Lower very simple "a+b" / "a-b" strings that may arrive from token text
+static char* lowerSimpleArithExpr(const char* expr) {
+    if (!expr) return strdup("0");
+    const char* p = strchr(expr, '+');
+    char op = 0;
+    if (!p) { p = strchr(expr, '-'); op = '-'; } else { op = '+'; }
+    if (!p) return resolveLeafAtom(expr);
+
+    size_t L = (size_t)(p - expr);
+    char lhs[128], rhs[128];
+    if (L >= sizeof(lhs)-1) L = sizeof(lhs)-2;
+    strncpy(lhs, expr, L); lhs[L] = 0;
+    snprintf(rhs, sizeof(rhs), "%s", p + 1);
+    // trim leading spaces (simple)
+    char* l = lhs; while (*l==' '||*l=='\t') ++l;
+    char* r = rhs; while (*r==' '||*r=='\t') ++r;
+
+    char* la = resolveLeafAtom(l);
+    char* ra = resolveLeafAtom(r);
+    char* t  = allocTemp();
+    if (op=='+') emit_add(t, la, ra); else emit_sub(t, la, ra);
+    return t;
+}
+
 void generateIRFromCFGNode(struct cfgNode* node) {
     if (!node || !node->name) return;
     if (node->visited) return;
@@ -316,37 +469,44 @@ void generateIRFromCFGNode(struct cfgNode* node) {
     if (isReturnNode(node->name)) {
         if (node->parseTree) {
             struct parseTree* t = unwrapExpr(node->parseTree);
-            char* val = processParseTreeAndGenerateIR(node->parseTree);
+            char* val = processParseTreeAndGenerateIR(t);
             emit_mov("r0", val);
             emit_ret();
             return;
         }
         char* expr = extractToken(node->name);
-        char* atom = resolveLeafAtom(expr);
+        char* atom = lowerSimpleArithExpr(expr);
         emit_mov("r0", atom);
         emit_ret();
         return;
     }
 
     if (isCond(node->name)) {
-        char* condExpr = extractToken(node->name);
-        char* labelThen = allocLabel();
-        char* labelElse = allocLabel();
-        char* labelEnd  = allocLabel();
+        struct parseTree* condTree = NULL;
+        if (node->parseTree) {
+            condTree = unwrapExpr(node->parseTree);
+        }
 
-        processCondExpression(condExpr, labelElse);
-        emit_jump(labelThen);
+        char* condExpr = condTree ? extractExprFromParseTree(condTree)
+                                  : extractToken(node->name);
+        char* L_else = allocLabel();
+        char* L_end  = allocLabel();
 
-        emit_label(labelThen);
+        // 3) если условие ложно → прыжок в else, иначе падение в then
+        processCondExpression(condExpr, L_else);
+
+        // ---- THEN ----
         if (node->conditionalBranch)
             generateIRFromCFGNode(node->conditionalBranch);
-        emit_jump(labelEnd);
+        emit_jump(L_end);
 
-        emit_label(labelElse);
+        // ---- ELSE ----
+        emit_label(L_else);
         if (node->defaultBranch)
             generateIRFromCFGNode(node->defaultBranch);
 
-        emit_label(labelEnd);
+        // ---- END ----
+        emit_label(L_end);
         return;
     }
 
@@ -372,7 +532,8 @@ void generateIRFromCFGNode(struct cfgNode* node) {
 
         emit_label(labelCond);
 
-        char* exprStr = extractExprFromParseTree(node->parseTree);
+        struct parseTree* condTree = unwrapExpr(node->parseTree);
+        char* exprStr = extractExprFromParseTree(condTree);
         printf("[while] Extracted expr: %s\n", exprStr);
 
         processCondExpression(exprStr, labelExit);
@@ -407,8 +568,17 @@ void collectGraphNodes(struct cfgNode *node, struct cfgNode **list, bool *used, 
 }
 
 void checkFullGraph(struct funcNode *fn) {
-    if (!fn || !fn->cfgEntry)
-        return;
+    if (!fn || !fn->cfgEntry) return;
+
+    if (fn->identifier) {
+        printf("[FUNC] label=%s\n", fn->identifier);
+        emit_label(fn->identifier);
+    } else {
+        printf("[FUNC] label=<NULL>\n");
+    }
+
+    // reset per-function local fallback map
+    locals_reset();
 
     struct cfgNode *arr[4096];
     bool used[65536];
@@ -426,6 +596,60 @@ void traverseGraph(struct programGraph *graph) {
         checkFullGraph(graph->functions[i]);
     }
 }
+
+// Structural lowering for simple conditions (comparison parseTree nodes)
+static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFalse) {
+    if (!pt || !pt->name) return false;
+    const char* tag = pt->name;
+
+    // We only handle binary comparison nodes here.
+    if (strcmp(tag, "OP_EQ") == 0 ||
+        strcmp(tag, "OP_NEQ") == 0 ||
+        strcmp(tag, "OP_LT") == 0 ||
+        strcmp(tag, "OP_GT") == 0 ||
+        strcmp(tag, "OP_LE") == 0 ||
+        strcmp(tag, "OP_GE") == 0) {
+
+        struct parseTree* L = unwrapExpr(pt->left);
+        struct parseTree* R = unwrapExpr(pt->right);
+
+        // Evaluate both sides to atoms (register/temp/immediate)
+        char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
+        char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
+
+        // Compute lhs - rhs into a fresh temp (do NOT use r0)
+        char* tcond = allocTemp();
+        emit_sub(tcond, lhs, rhs);
+
+        if (strcmp(tag, "OP_EQ") == 0) {
+            // false when tcond != 0
+            emit_jumpgt(tcond, labelIfFalse);
+            emit_jumplt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_NEQ") == 0) {
+            // false when tcond == 0
+            emit_cond_jump_false(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_GT") == 0) {
+            // false when tcond <= 0  → (==0) or (<0)
+            emit_cond_jump_false(tcond, labelIfFalse);
+            emit_jumplt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_LT") == 0) {
+            // false when tcond >= 0  → (==0) or (>0)
+            emit_cond_jump_false(tcond, labelIfFalse);
+            emit_jumpgt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_GE") == 0) {
+            // false when tcond < 0
+            emit_jumplt(tcond, labelIfFalse);
+        } else if (strcmp(tag, "OP_LE") == 0) {
+            // false when tcond > 0
+            emit_jumpgt(tcond, labelIfFalse);
+        }
+
+        return true;
+        }
+
+    return false;
+}
+
 
 void compile(pANTLR3_BASE_TREE* tree, struct programGraph *graph) {
     symbolTable* symTable = processTreeToBuild(tree);

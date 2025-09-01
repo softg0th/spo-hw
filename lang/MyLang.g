@@ -99,7 +99,7 @@ loopStatement
   ;
 
 returnStatement
-  : 'return' expression body -> ^(ReturnToken ^(ExpressionToken expression))
+  : 'return' expression ';'? -> ^(ReturnToken ^(ExpressionToken expression))
   ;
 
 repeatStatement

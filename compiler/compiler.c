@@ -3,7 +3,31 @@
 #include "asm.h"
 #include "../ir/errors.h"
 
+
+
 #include "lib.h"
+// Forward decls for helpers used before their definitions
+char* allocTemp();
+
+// ---- Dynamic typing runtime switch ----
+// Set to 1 to route arithmetic/comparison through dynamic runtime helpers.
+// This scaffolds "dynamic typing" without breaking current static codegen.
+#ifndef ENABLE_DYNAMIC_RUNTIME
+#define ENABLE_DYNAMIC_RUNTIME 1
+#endif
+
+#if ENABLE_DYNAMIC_RUNTIME
+// Helper: call a dynamic runtime binary op: fname(lhs, rhs) -> r0 (result)
+static char* call_dyn_binary(const char* fname, const char* lhsAtom, const char* rhsAtom) {
+    // Move arguments into call registers (r0, r1), call helper, copy r0 to a fresh temp.
+    if (lhsAtom) emit_mov("r0", (char*)lhsAtom); else emit_mov("r0", "0");
+    if (rhsAtom) emit_mov("r1", (char*)rhsAtom); else emit_mov("r1", "0");
+    emit_call(fname);
+    char* t = allocTemp();
+    emit_mov(t, "r0");
+    return t;
+}
+#endif
 
 symbolTable* globalSymTable;
 extern int irCount;
@@ -301,8 +325,18 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
 
         char* lhs = processParseTreeAndGenerateIR(pt->left);
         char* rhs = processParseTreeAndGenerateIR(pt->right);
-        char* result = allocTemp();
+        // Compute arithmetic
+#if ENABLE_DYNAMIC_RUNTIME
+        const char* fname = NULL;
+        if      (strcmp(pt->name, "OP_ADD") == 0) fname = "__dyn_add";
+        else if (strcmp(pt->name, "OP_SUB") == 0) fname = "__dyn_sub";
+        else if (strcmp(pt->name, "OP_MUL") == 0) fname = "__dyn_mul";
+        else if (strcmp(pt->name, "OP_DIV") == 0) fname = "__dyn_div";
+        else if (strcmp(pt->name, "OP_MOD") == 0) fname = "__dyn_mod";
 
+        char* result = call_dyn_binary(fname, lhs, rhs);
+#else
+        char* result = allocTemp();
         if (strcmp(pt->name, "OP_ADD") == 0) {
             emit_add(result, lhs, rhs);
         } else if (strcmp(pt->name, "OP_SUB") == 0) {
@@ -314,7 +348,7 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         } else if (strcmp(pt->name, "OP_MOD") == 0) {
             emit_rem(result, lhs, rhs);
         }
-
+#endif
         return result;
     }
 
@@ -349,6 +383,22 @@ static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFals
         char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
         char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
 
+#if ENABLE_DYNAMIC_RUNTIME
+        // Dynamic path: call runtime compare, which returns 0 (false) or 1 (true) in r0.
+        const char* fname = NULL;
+        if      (strcmp(tag, "OP_EQ") == 0)  fname = "__dyn_eq";
+        else if (strcmp(tag, "OP_NEQ") == 0) fname = "__dyn_neq";
+        else if (strcmp(tag, "OP_LT") == 0)  fname = "__dyn_lt";
+        else if (strcmp(tag, "OP_GT") == 0)  fname = "__dyn_gt";
+        else if (strcmp(tag, "OP_LE") == 0)  fname = "__dyn_le";
+        else if (strcmp(tag, "OP_GE") == 0)  fname = "__dyn_ge";
+
+        char* tbool = call_dyn_binary(fname, lhs, rhs);
+        // Jump to else when condition is false (i.e., tbool == 0)
+        emit_cond_jump_false(tbool, (char*)labelIfFalse);
+        return true;
+#else
+        // Static int path: lhs - rhs in tcond, then branch by sign/zero.
         // Compute lhs - rhs into a fresh temp (do NOT use r0)
         char* tcond = allocTemp();
         emit_sub(tcond, lhs, rhs);
@@ -377,7 +427,8 @@ static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFals
         }
 
         return true;
-        }
+#endif
+    }
 
     return false;
 }
@@ -385,35 +436,57 @@ static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFals
 void processCondExpression(const char* exprStr, const char* labelIfFalse) {
     char lhs[64] = {0}, rhs[64] = {0}, op[8] = {0};
     if (!exprStr) {
-        emit_jump(labelIfFalse);
+        emit_jump((char*)labelIfFalse);
         return;
     }
 
     if (strlen(exprStr) == 0) {
-        emit_jump(labelIfFalse);
+        emit_jump((char*)labelIfFalse);
         return;
     }
-    // If there's no relational operator, handle as a constant or truthy check on an atom
     if (!strpbrk(exprStr, "=!<>")) {
         char* endptr = NULL;
         long v = strtol(exprStr, &endptr, 10);
-        // Pure numeric literal
         if (endptr && *endptr == '\0') {
             if (v == 0) {
-                emit_jump(labelIfFalse);
+                emit_jump((char*)labelIfFalse);
             }
             return;
         }
-        // Treat as "if (atom)"; jump when atom == 0
+        // Treat as "if (atom)"; jump when atom is falsy
         char* atom = resolveLeafAtom(exprStr);
+#if ENABLE_DYNAMIC_RUNTIME
+        char* tbool = call_dyn_binary("__dyn_truthy", atom, NULL);
+        emit_cond_jump_false(tbool, (char*)labelIfFalse);
+#else
         char* tcond = allocTemp();
         emit_mov(tcond, atom);
-        emit_cond_jump_false(tcond, labelIfFalse);
+        emit_cond_jump_false(tcond, (char*)labelIfFalse);
+#endif
         free(atom);
         return;
     }
     splitCondExpr(exprStr, lhs, op, rhs);
 
+#if ENABLE_DYNAMIC_RUNTIME
+    // Dynamic compare via runtime helpers: __dyn_eq/__dyn_neq/__dyn_lt/__dyn_gt/__dyn_le/__dyn_ge
+    char* lhsAtom = resolveLeafAtom(lhs);
+    char* rhsAtom = resolveLeafAtom(rhs);
+
+    const char* fname = NULL;
+    if      (strcmp(op, "==") == 0) fname = "__dyn_eq";
+    else if (strcmp(op, "!=") == 0) fname = "__dyn_neq";
+    else if (strcmp(op, "<")  == 0) fname = "__dyn_lt";
+    else if (strcmp(op, ">")  == 0) fname = "__dyn_gt";
+    else if (strcmp(op, "<=") == 0) fname = "__dyn_le";
+    else if (strcmp(op, ">=") == 0) fname = "__dyn_ge";
+
+    char* tbool = call_dyn_binary(fname, lhsAtom, rhsAtom);
+    emit_cond_jump_false(tbool, (char*)labelIfFalse);
+    free(lhsAtom);
+    free(rhsAtom);
+    return;
+#else
     char* lhsAtom = resolveLeafAtom(lhs);
     char* rhsAtom = resolveLeafAtom(rhs);
 
@@ -425,23 +498,24 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
     free(rhsAtom);
 
     if (strcmp(op, "==") == 0) {
-        emit_jumpgt(tcond, labelIfFalse);
-        emit_jumplt(tcond, labelIfFalse);
+        emit_jumpgt(tcond, (char*)labelIfFalse);
+        emit_jumplt(tcond, (char*)labelIfFalse);
     } else if (strcmp(op, "!=") == 0) {
-        emit_cond_jump_false(tcond, labelIfFalse);
+        emit_cond_jump_false(tcond, (char*)labelIfFalse);
     } else if (strcmp(op, ">") == 0) {
-        emit_cond_jump_false(tcond, labelIfFalse);
-        emit_jumplt(tcond, labelIfFalse);
+        emit_cond_jump_false(tcond, (char*)labelIfFalse);
+        emit_jumplt(tcond, (char*)labelIfFalse);
     } else if (strcmp(op, "<") == 0) {
-        emit_cond_jump_false(tcond, labelIfFalse);
-        emit_jumpgt(tcond, labelIfFalse);
+        emit_cond_jump_false(tcond, (char*)labelIfFalse);
+        emit_jumpgt(tcond, (char*)labelIfFalse);
     } else if (strcmp(op, ">=") == 0) {
-        emit_jumplt(tcond, labelIfFalse);
+        emit_jumplt(tcond, (char*)labelIfFalse);
     } else if (strcmp(op, "<=") == 0) {
-        emit_jumpgt(tcond, labelIfFalse);
+        emit_jumpgt(tcond, (char*)labelIfFalse);
     } else {
-        emit_cond_jump_false(tcond, labelIfFalse);
+        emit_cond_jump_false(tcond, (char*)labelIfFalse);
     }
+#endif
 }
 
 char* extractExprFromParseTree(struct parseTree* pt) {

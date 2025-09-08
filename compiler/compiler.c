@@ -6,26 +6,22 @@
 
 
 #include "lib.h"
-// Forward decls for helpers used before their definitions
+
 char* allocTemp();
 
-// ---- Dynamic typing runtime switch ----
-// Set to 1 to route arithmetic/comparison through dynamic runtime helpers.
-// This scaffolds "dynamic typing" without breaking current static codegen.
 #ifndef ENABLE_DYNAMIC_RUNTIME
 #define ENABLE_DYNAMIC_RUNTIME 1
 #endif
 
+static int gFrameSize = 0;
+
 #if ENABLE_DYNAMIC_RUNTIME
-// Helper: call a dynamic runtime binary op: fname(lhs, rhs) -> r0 (result)
+
 static char* call_dyn_binary(const char* fname, const char* lhsAtom, const char* rhsAtom) {
-    // Move arguments into call registers (r0, r1), call helper, copy r0 to a fresh temp.
     if (lhsAtom) emit_mov("r0", (char*)lhsAtom); else emit_mov("r0", "0");
     if (rhsAtom) emit_mov("r1", (char*)rhsAtom); else emit_mov("r1", "0");
     emit_call(fname);
-    char* t = allocTemp();
-    emit_mov(t, "r0");
-    return t;
+    return strdup("r0");
 }
 #endif
 
@@ -37,11 +33,11 @@ static LocalSym gLocalSyms[1024];
 static int gLocalSymCount = 0;
 
 static void locals_reset(void) {
-    for (int i = 0; i < gLocalSymCount; ++i) {
-        free(gLocalSyms[i].name);
-    }
+    for (int i = 0; i < gLocalSymCount; ++i) free(gLocalSyms[i].name);
     gLocalSymCount = 0;
+    gFrameSize = 0;
 }
+
 
 static bool locals_lookup(const char* name, int* outAddr) {
     if (!name) return false;
@@ -63,6 +59,25 @@ static void locals_insert(const char* name, int addr) {
     }
 }
 
+static void plan_locals_in_tree(struct parseTree* pt) {
+    if (!pt) return;
+    if (strcmp(pt->name, "VarDecl") == 0 || strcmp(pt->name, "VarDeclToken") == 0) {
+        struct parseTree* idNode = pt->left;
+        if (idNode) {
+            char* varName = idNode->name ? strdup(idNode->name) : NULL;
+            if (varName) {
+                int dummy;
+                if (!locals_lookup(varName, &dummy)) {
+                    gFrameSize += 2;
+                    locals_insert(varName, -gFrameSize);
+                }
+                free(varName);
+            }
+        }
+    }
+    plan_locals_in_tree(pt->left);
+    plan_locals_in_tree(pt->right);
+}
 
 static bool isOperation(char* ptName) {
     const char* binaryOps[] = {
@@ -139,30 +154,25 @@ static char* resolveLeafAtom(const char* name) {
         if (r) {
             return strdup(r);
         } else if (addr > 0) {
-            char* tmp = allocTemp();
-            printf("[LOAD] name=%s addr=%d -> %s\n", name, addr, tmp);
             char buf[32];
             snprintf(buf, sizeof(buf), "%d", addr);
             char* addrStr = strdup(buf);
-            emit_load(addrStr, tmp);
-            return tmp;
+            emit_load(addrStr, "r0");
+            return strdup("r0");
         }
     }
 
-    // try local fallback map
     if (locals_lookup(name, &addr)) {
         const char* r = regByAddr(addr);
         if (r) {
             return strdup(r);
-        } else if (addr > 0) {
-            char* tmp = allocTemp();
+        } else {
             char buf[32];
             snprintf(buf, sizeof(buf), "%d", addr);
-            emit_load(strdup(buf), tmp);
-            return tmp;
+            emit_load(strdup(buf), "r0");
+            return strdup("r0");
         }
     }
-
     return strdup(name);
 }
 
@@ -191,14 +201,12 @@ static char* resolveLValueName(struct parseTree* node) {
         }
         return name;
     } else {
-        // if not found in global table, check local fallback map
         if (locals_lookup(name, &addr)) {
             const char* r = regByAddr(addr);
             if (r) {
                 free(name);
                 return strdup(r);
             }
-            // keep the plain name; the caller will compute/store by address
             return name;
         }
     }
@@ -225,7 +233,6 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         char* rhs     = exprNode ? processParseTreeAndGenerateIR(exprNode) : strdup("0");
 
         int addr = 0;
-        // Locals-only allocation: don't touch the global symbol table for local vars
         if (!locals_lookup(varName, &addr)) {
             addr = nextFreeAddress;
             nextFreeAddress += 2;
@@ -234,7 +241,7 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
 
         char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
         printf("[DECL] %s addr=%d\n", varName, addr);
-        emit_store(rhs, strdup(buf));  // store rhs -> [addr]
+        emit_store(rhs, strdup(buf));
         free(varName);
         return NULL;
     }
@@ -247,7 +254,6 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         char* argv[4] = {0};
         int argc = 0;
 
-        // Flatten up to 4 arguments from a binary tree/list node using an explicit stack
         struct parseTree* stack[32];
         int top = 0;
         if (args) stack[top++] = args;
@@ -258,13 +264,10 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
 
             if (n->name && (strcmp(n->name, "ExpressionListToken") == 0 ||
                             strcmp(n->name, "ExpressionList") == 0)) {
-                // push right then left to evaluate left-to-right
                 if (n->right) stack[top++] = n->right;
                 if (n->left)  stack[top++] = n->left;
                 continue;
                             }
-
-            // treat this subtree as one expression argument
             argv[argc++] = processParseTreeAndGenerateIR(n);
         }
 
@@ -274,9 +277,7 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         if (argc > 3) emit_mov("r3", argv[3]);
 
         emit_call(fname);
-        char* tmp = allocTemp();
-        emit_mov(tmp, "r0");
-        return tmp;
+        return strdup("r0");
     }
 
     if (strcmp(pt->name, "ReturnToken") == 0 ||
@@ -302,30 +303,54 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
             char* dst = resolveLValueName(pt->left);
             char* rhs = processParseTreeAndGenerateIR(pt->right);
 
-            if (isRegName(dst)) {          // r0..r3 (параметры)
+            // Параметры в r0..r3
+            if (isRegName(dst)) {
                 emit_mov(dst, rhs);
                 return NULL;
             }
 
             int addr;
-            if (!findSymbolAddressByName(globalSymTable, dst, &addr)) {
-                if (!locals_lookup(dst, &addr)) {
-                    addr = nextFreeAddress;
-                    nextFreeAddress += 2;
-                    locals_insert(dst, addr);
+            // Сначала пытаемся найти как глобал/параметр в текущей таблице
+            if (findSymbolAddressByName(globalSymTable, dst, &addr)) {
+                const char* r = regByAddr(addr);
+                if (r) {
+                    emit_mov(r, rhs); // крайне редкий случай, если сюда попал параметр
+                    return NULL;
+                }
+                if (addr > 0) {
+                    char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+                    emit_store(rhs, strdup(buf));
+                    return NULL;
+                }
+                // если addr <= 0 и не r0..r3 — сюда мы не должны попадать
+            }
+
+            // Локальная переменная (офсет от fp)
+            if (locals_lookup(dst, &addr)) {
+                if (addr <= 0) {
+                    emit_store_fp(rhs, addr);
+                    return NULL;
+                } else {
+                    // редкий случай: абсолютный адрес — оставим старое поведение
+                    char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+                    emit_store(rhs, strdup(buf));
+                    return NULL;
                 }
             }
-            // если нашли в глобальной — addr уже задан и мы его используем
 
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d", addr);
-            emit_store(rhs, strdup(buf));
+            // Фоллбек: создадим «глобал» по абсолютному адресу (старое поведение)
+            addr = nextFreeAddress;
+            nextFreeAddress += 2;
+            locals_insert(dst, addr);
+            {
+                char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+                emit_store(rhs, strdup(buf));
+            }
             return NULL;
         }
 
         char* lhs = processParseTreeAndGenerateIR(pt->left);
         char* rhs = processParseTreeAndGenerateIR(pt->right);
-        // Compute arithmetic
 #if ENABLE_DYNAMIC_RUNTIME
         const char* fname = NULL;
         if      (strcmp(pt->name, "OP_ADD") == 0) fname = "__dyn_add";
@@ -352,8 +377,6 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         return result;
     }
 
-
-    // Generic fallback: descend into children so we don't skip statements wrapped in nodes
     if (pt->left) {
         processParseTreeAndGenerateIR(pt->left);
     }
@@ -363,12 +386,10 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
     return NULL;
 }
 
-// Structural lowering for simple conditions (comparison parseTree nodes)
 static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFalse) {
     if (!pt || !pt->name) return false;
     const char* tag = pt->name;
 
-    // We only handle binary comparison nodes here.
     if (strcmp(tag, "OP_EQ") == 0 ||
         strcmp(tag, "OP_NEQ") == 0 ||
         strcmp(tag, "OP_LT") == 0 ||
@@ -379,12 +400,10 @@ static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFals
         struct parseTree* L = unwrapExpr(pt->left);
         struct parseTree* R = unwrapExpr(pt->right);
 
-        // Evaluate both sides to atoms (register/temp/immediate)
         char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
         char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
 
 #if ENABLE_DYNAMIC_RUNTIME
-        // Dynamic path: call runtime compare, which returns 0 (false) or 1 (true) in r0.
         const char* fname = NULL;
         if      (strcmp(tag, "OP_EQ") == 0)  fname = "__dyn_eq";
         else if (strcmp(tag, "OP_NEQ") == 0) fname = "__dyn_neq";
@@ -394,12 +413,9 @@ static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFals
         else if (strcmp(tag, "OP_GE") == 0)  fname = "__dyn_ge";
 
         char* tbool = call_dyn_binary(fname, lhs, rhs);
-        // Jump to else when condition is false (i.e., tbool == 0)
         emit_cond_jump_false(tbool, (char*)labelIfFalse);
         return true;
 #else
-        // Static int path: lhs - rhs in tcond, then branch by sign/zero.
-        // Compute lhs - rhs into a fresh temp (do NOT use r0)
         char* tcond = allocTemp();
         emit_sub(tcond, lhs, rhs);
 
@@ -453,7 +469,6 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
             }
             return;
         }
-        // Treat as "if (atom)"; jump when atom is falsy
         char* atom = resolveLeafAtom(exprStr);
 #if ENABLE_DYNAMIC_RUNTIME
         char* tbool = call_dyn_binary("__dyn_truthy", atom, NULL);
@@ -469,7 +484,6 @@ void processCondExpression(const char* exprStr, const char* labelIfFalse) {
     splitCondExpr(exprStr, lhs, op, rhs);
 
 #if ENABLE_DYNAMIC_RUNTIME
-    // Dynamic compare via runtime helpers: __dyn_eq/__dyn_neq/__dyn_lt/__dyn_gt/__dyn_le/__dyn_ge
     char* lhsAtom = resolveLeafAtom(lhs);
     char* rhsAtom = resolveLeafAtom(rhs);
 
@@ -556,7 +570,6 @@ char* extractExprFromParseTree(struct parseTree* pt) {
     return strdup("BAD_EXPR");
 }
 
-// Lower very simple "a+b" / "a-b" strings that may arrive from token text
 static char* lowerSimpleArithExpr(const char* expr) {
     if (!expr) return strdup("0");
     const char* p = strchr(expr, '+');
@@ -569,7 +582,6 @@ static char* lowerSimpleArithExpr(const char* expr) {
     if (L >= sizeof(lhs)-1) L = sizeof(lhs)-2;
     strncpy(lhs, expr, L); lhs[L] = 0;
     snprintf(rhs, sizeof(rhs), "%s", p + 1);
-    // trim leading spaces (simple)
     char* l = lhs; while (*l==' '||*l=='\t') ++l;
     char* r = rhs; while (*r==' '||*r=='\t') ++r;
 
@@ -578,6 +590,156 @@ static char* lowerSimpleArithExpr(const char* expr) {
     char* t  = allocTemp();
     if (op=='+') emit_add(t, la, ra); else emit_sub(t, la, ra);
     return t;
+}
+
+// --- Simple string expression parser for fallback lowering (calls + precedence) ---
+
+static void skip_ws(const char** p) {
+    while (*p && **p && isspace((unsigned char)**p)) (*p)++;
+}
+
+static int is_ident_start(char c) {
+    return isalpha((unsigned char)c) || c == '_';
+}
+
+static int is_ident_char(char c) {
+    return isalnum((unsigned char)c) || c == '_';
+}
+
+static char* parse_expr_str(const char** p);
+
+static char* apply_binop_from_str(const char* op, char* a, char* b) {
+#if ENABLE_DYNAMIC_RUNTIME
+    const char* fname = NULL;
+    if      (strcmp(op, "+") == 0) fname = "__dyn_add";
+    else if (strcmp(op, "-") == 0) fname = "__dyn_sub";
+    else if (strcmp(op, "*") == 0) fname = "__dyn_mul";
+    else if (strcmp(op, "/") == 0) fname = "__dyn_div";
+    else if (strcmp(op, "%") == 0) fname = "__dyn_mod";
+    return call_dyn_binary(fname, a, b);
+#else
+    char* t = allocTemp();
+    if      (strcmp(op, "+") == 0) emit_add(t, a, b);
+    else if (strcmp(op, "-") == 0) emit_sub(t, a, b);
+    else if (strcmp(op, "*") == 0) emit_mul(t, a, b);
+    else if (strcmp(op, "/") == 0) emit_div(t, a, b);
+    else if (strcmp(op, "%") == 0) emit_rem(t, a, b);
+    return t;
+#endif
+}
+
+static char* parse_identifier(const char** p) {
+    const char* s = *p;
+    while (**p && is_ident_char(**p)) (*p)++;
+    size_t n = (size_t)(*p - s);
+    char* id = (char*)malloc(n + 1);
+    memcpy(id, s, n);
+    id[n] = '\0';
+    return id;
+}
+
+static char* parse_number(const char** p) {
+    const char* s = *p;
+    while (**p && isdigit((unsigned char)**p)) (*p)++;
+    size_t n = (size_t)(*p - s);
+    char* num = (char*)malloc(n + 1);
+    memcpy(num, s, n);
+    num[n] = '\0';
+    return num;
+}
+
+static char* parse_primary_str(const char** p) {
+    skip_ws(p);
+    if (**p == '(') {
+        (*p)++;
+        char* v = parse_expr_str(p);
+        skip_ws(p);
+        if (**p == ')') (*p)++;
+        return v;
+    }
+    if (is_ident_start(**p)) {
+        char* id = parse_identifier(p);
+        skip_ws(p);
+        if (**p == '(') {
+            // function call
+            (*p)++;
+            char* args[4] = {0};
+            int argc = 0;
+            skip_ws(p);
+            if (**p != ')') {
+                while (argc < 4) {
+                    args[argc++] = parse_expr_str(p);
+                    skip_ws(p);
+                    if (**p == ',') { (*p)++; skip_ws(p); continue; }
+                    break;
+                }
+            }
+            skip_ws(p);
+            if (**p == ')') (*p)++;
+
+            if (argc > 0) emit_mov("r0", args[0]);
+            if (argc > 1) emit_mov("r1", args[1]);
+            if (argc > 2) emit_mov("r2", args[2]);
+            if (argc > 3) emit_mov("r3", args[3]);
+
+            emit_call(id);
+            free(id);
+            return strdup("r0");
+        } else {
+            char* atom = resolveLeafAtom(id);
+            free(id);
+            return atom;
+        }
+    }
+    if (isdigit((unsigned char)**p)) {
+        return parse_number(p);
+    }
+    // Fallback: treat as zero
+    return strdup("0");
+}
+
+static char* parse_muldiv_str(const char** p) {
+    char* left = parse_primary_str(p);
+    for (;;) {
+        skip_ws(p);
+        char c = **p;
+        if (c == '*' || c == '/' || c == '%') {
+            (*p)++;
+            char op[2] = { c, 0 };
+            char* right = parse_primary_str(p);
+            left = apply_binop_from_str(op, left, right);
+        } else {
+            break;
+        }
+    }
+    return left;
+}
+
+static char* parse_addsub_str(const char** p) {
+    char* left = parse_muldiv_str(p);
+    for (;;) {
+        skip_ws(p);
+        char c = **p;
+        if (c == '+' || c == '-') {
+            (*p)++;
+            char op[2] = { c, 0 };
+            char* right = parse_muldiv_str(p);
+            left = apply_binop_from_str(op, left, right);
+        } else {
+            break;
+        }
+    }
+    return left;
+}
+
+static char* parse_expr_str(const char** p) {
+    return parse_addsub_str(p);
+}
+
+static char* lowerExprFromString(const char* s) {
+    if (!s) return strdup("0");
+    const char* p = s;
+    return parse_expr_str(&p);
 }
 
 void generateIRFromCFGNode(struct cfgNode* node) {
@@ -595,7 +757,7 @@ void generateIRFromCFGNode(struct cfgNode* node) {
             return;
         }
         char* expr = extractToken(node->name);
-        char* atom = lowerSimpleArithExpr(expr);
+        char* atom = lowerExprFromString(expr);
         emit_mov("r0", atom);
         emit_ret();
         return;
@@ -610,7 +772,6 @@ void generateIRFromCFGNode(struct cfgNode* node) {
         char* L_else = allocLabel();
         char* L_end  = allocLabel();
 
-        // Prefer structural lowering (no fragile string parsing)
         bool lowered = false;
         if (condTree) {
             lowered = lowerCondFromParseTree(condTree, L_else);
@@ -621,17 +782,14 @@ void generateIRFromCFGNode(struct cfgNode* node) {
             processCondExpression(condExpr, L_else);
         }
 
-        // ---- THEN ----
         if (node->conditionalBranch)
             generateIRFromCFGNode(node->conditionalBranch);
         emit_jump(L_end);
 
-        // ---- ELSE ----
         emit_label(L_else);
         if (node->defaultBranch)
             generateIRFromCFGNode(node->defaultBranch);
 
-        // ---- END ----
         emit_label(L_end);
         return;
     }
@@ -704,20 +862,19 @@ void checkFullGraph(struct funcNode *fn) {
         printf("[FUNC] label=<NULL>\n");
     }
 
-    // reset per-function local fallback map
     locals_reset();
 
     struct cfgNode *arr[4096];
-    bool used[65536];
-    memset(used, 0, sizeof(used));
+    bool used[65536] = {0};
     int cnt = 0;
     collectGraphNodes(fn->cfgEntry, arr, used, &cnt);
+
+    // Removed pre-planning of locals and stack frame allocation.
 
     for (int i = 0; i < cnt; i++) {
         generateIRFromCFGNode(arr[i]);
     }
 }
-
 void traverseGraph(struct programGraph *graph) {
     for (int i = 0; i < graph->funcCount; i++) {
         checkFullGraph(graph->functions[i]);

@@ -5,7 +5,9 @@ typedef enum {
      IR_JMP, IR_JEQ, IR_JGT, IR_JLT,
      IR_PUSH, IR_POP,
      IR_CALL, IR_RET,
-     IR_LABEL
+     IR_LABEL,
+    IR_LOAD_FP,
+    IR_STORE_FP,
 } IROpcodes;
 
 typedef struct {
@@ -35,3 +37,5 @@ void emit_load(const char* ptr, const char* to);
 void emit_store(const char* from, const char* ptr);
 void emit_ret();
 void emit_call(const char* fname);
+void emit_store_fp(char* from, int off);
+void emit_load_fp(int off, char* to);

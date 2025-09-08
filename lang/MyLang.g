@@ -28,6 +28,8 @@ tokens {
   ArrayList;
   CallToken;
   ExpressionListToken;
+  InputToken;
+  OutputToken;
 }
 
 source
@@ -59,6 +61,8 @@ statement
   |  returnStatement
   |  varDeclaration
   |  arrayType
+  |  inputStatement
+  |  outputStatement
   ;
 
 body
@@ -114,6 +118,14 @@ breakStatement
 
 expressionStatement
   :  expression ';'
+  ;
+
+inputStatement
+  : 'cin' identifier ';'? -> ^(InputToken ^(Identifier identifier))
+  ;
+
+outputStatement
+  : 'cout' expression ';'? -> ^(OutputToken ^(ExpressionToken expression))
   ;
 
 expression

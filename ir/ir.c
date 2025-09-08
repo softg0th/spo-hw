@@ -118,3 +118,12 @@ void emit_ret() {
 void emit_call(const char* fname) {
     emit_ir(IR_CALL, NULL, fname, NULL);
 }
+
+void emit_store_fp(char* from, int off) {
+    char buf[32]; snprintf(buf, sizeof(buf), "%d", off);
+    emit_ir(IR_STORE_FP, buf, from, NULL);
+}
+void emit_load_fp(int off, char* to) {
+    char buf[32]; snprintf(buf, sizeof(buf), "%d", off);
+    emit_ir(IR_LOAD_FP, to, buf, NULL);
+}

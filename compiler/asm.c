@@ -25,7 +25,8 @@ void generateASM(IRInstruction **pool, int count) {
     if (!entryLabel) entryLabel = "start";
 
     fprintf(asmFile, "[section code_ram]\n");
-    fprintf(asmFile, "\tjump %s\n\n", entryLabel);
+    fprintf(asmFile, "\tcall %s\n", entryLabel);
+    fprintf(asmFile, "\thlt\n\n");
 
     // Dynamic runtime shims
     fprintf(asmFile,

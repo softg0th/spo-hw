@@ -113,6 +113,23 @@ void generateASM(IRInstruction **pool, int count) {
         "\tmov 0, r0\n"
         "\tret\n"
         "\n"
+        "__io_out:\n"
+        "\tmov r0, outReg\n"
+        "\tret\n"
+        "\n"
+        "__io_in:\n"
+        "\t; returns 0 for now (stub)\n"
+        "\tmov 0, r0\n"
+        "\tret\n"
+        "\n"
+        "__io_println:\n"
+        "\tmov 10, outReg\n"
+        "\tret\n"
+        "\n"
+        "__io_print_str:\n"
+        "\t; expects r0 = address of zero-terminated string (ignored in stub)\n"
+        "\tret\n"
+        "\n"
     );
 
     for (int i = 0; i < count; ++i) {

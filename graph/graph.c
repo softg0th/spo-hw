@@ -120,6 +120,61 @@ char* generateBinopName(pANTLR3_BASE_TREE tree) {
     return NULL;
 }
 
+// --- iostream helpers -------------------------------------------------
+
+static int isIdentLeaf(struct parseTree* n, const char* id) {
+    return n && !n->left && !n->right && n->name && strcmp(n->name, id) == 0;
+}
+
+static struct parseTree* newIoNode(const char* tag, struct parseTree* item, struct parseTree* next) {
+    struct parseTree* io = calloc(1, sizeof(struct parseTree));
+    io->name = safeStrdup(tag);  // "IO_OUT" или "IO_IN"
+    io->left = item;             // текущий элемент (выражение/идентификатор)
+    io->right = next;            // следующая часть цепочки или NULL
+    return io;
+}
+
+// Присоединить item к уже собранной цепочке IO_*, либо создать новую
+static struct parseTree* appendIoItem(const char* tag, struct parseTree* existing, struct parseTree* item) {
+    if (!existing || strcmp(existing->name, tag) != 0) {
+        return newIoNode(tag, item, NULL);
+    }
+    struct parseTree* p = existing;
+    while (p->right && p->right->name && strcmp(p->right->name, tag) == 0) {
+        p = p->right;
+    }
+    p->right = newIoNode(tag, item, NULL);
+    return existing;
+}
+
+// Рекурсивно: переписываем ((cout<<a)<<b)<<c -> IO_OUT(a, IO_OUT(b, IO_OUT(c,NULL)))
+// и       ((cin >>x)>>y)>>z -> IO_IN (x,  IO_IN (y,  IO_IN (z, NULL)))
+static struct parseTree* rewriteIOChains(struct parseTree* n) {
+    if (!n) return NULL;
+
+    n->left  = rewriteIOChains(n->left);
+    n->right = rewriteIOChains(n->right);
+
+    if (n->name) {
+        if (strcmp(n->name, "OP_LSHIFT") == 0) {           // '<<'
+            if (isIdentLeaf(n->left, "cout")) {
+                return newIoNode("IO_OUT", n->right, NULL);
+            }
+            if (n->left && n->left->name && strcmp(n->left->name, "IO_OUT") == 0) {
+                return appendIoItem("IO_OUT", n->left, n->right);
+            }
+        } else if (strcmp(n->name, "BINOP_RSHIFT") == 0) { // '>>'
+            if (isIdentLeaf(n->left, "cin")) {
+                return newIoNode("IO_IN", n->right, NULL);
+            }
+            if (n->left && n->left->name && strcmp(n->left->name, "IO_IN") == 0) {
+                return appendIoItem("IO_IN", n->left, n->right);
+            }
+        }
+    }
+    return n;
+}
+
 bool isOperation(pANTLR3_BASE_TREE tree) {
     if (tree == NULL) return false;
 
@@ -160,6 +215,7 @@ struct parseTree *buildParseTreeForExpression(pANTLR3_BASE_TREE expr)
             opNode->left  = buildParseTreeForExpression(expr->getChild(expr,0));
             opNode->right = buildParseTreeForExpression(expr->getChild(expr,1));
         }
+        opNode = rewriteIOChains(opNode);
         return opNode;
     }
 
@@ -187,7 +243,9 @@ struct cfgNode* createCfgNode(pANTLR3_BASE_TREE tree) {
 
     if (isOperation(tree)) {
         node->nodeOp = generateBinopName(tree);
-        tempParentNode->isParseTreeRoot = true;
+        if (tempParentNode) {
+            tempParentNode->isParseTreeRoot = true;
+        }
         node->isParseTreeRoot=true;
     } else {
         node->isParseTreeRoot = false;
@@ -264,7 +322,8 @@ static void getExpressionString(pANTLR3_BASE_TREE tree, char* buf, size_t sz) {
      !strcmp(nm,"<=")||!strcmp(nm,">=") ||
      !strcmp(nm,"+") ||!strcmp(nm,"-")  ||
      !strcmp(nm,"*") ||!strcmp(nm,"/")  ||
-     !strcmp(nm,"%")))
+     !strcmp(nm,"%") ||
+     !strcmp(nm,"<<")||!strcmp(nm,">>")))
     {
         strcat(buf,"(");
         getExpressionString(tree->getChild(tree,0), buf, sz);
@@ -536,6 +595,48 @@ static void processGenericNode(pANTLR3_BASE_TREE tree, struct context *ctx)
 
     pANTLR3_STRING s = tree->toString(tree);
     const char *nm = (s && s->chars) ? s->chars : "";
+
+    if (!strcmp(nm, "OutputToken")) {
+        struct cfgNode *g = createCfgNode(tree);
+        g->name = safeStrdup("OutputToken");
+
+        struct parseTree *pt = calloc(1, sizeof(*pt));
+        pt->name = safeStrdup("OutputToken");
+
+        pANTLR3_BASE_TREE exprChild = NULL;
+        unsigned cc = tree->getChildCount(tree);
+        if (cc > 0) exprChild = tree->getChild(tree, 0);
+        if (exprChild) {
+            pt->left = buildParseTreeForExpression(exprChild);
+        }
+        g->parseTree = pt;
+
+        addNodeToGlobalList(g);
+        if (ctx->curr) ctx->curr->defaultBranch = g;
+        ctx->curr = g;
+
+        return;
+    }
+    if (!strcmp(nm, "InputToken")) {
+        struct cfgNode *g = createCfgNode(tree);
+        g->name = safeStrdup("InputToken");
+
+        struct parseTree *pt = calloc(1, sizeof(*pt));
+        pt->name = safeStrdup("InputToken");
+
+        pANTLR3_BASE_TREE idChild = NULL;
+        unsigned cc = tree->getChildCount(tree);
+        if (cc > 0) idChild = tree->getChild(tree, 0);
+        if (idChild) {
+            pt->left = buildParseTreeForExpression(idChild);
+        }
+        g->parseTree = pt;
+
+        addNodeToGlobalList(g);
+        if (ctx->curr) ctx->curr->defaultBranch = g;
+        ctx->curr = g;
+        return;
+    }
 
     if (!strcmp(nm, "VarDeclToken"))
     {

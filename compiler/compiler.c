@@ -141,8 +141,47 @@ static struct parseTree* unwrapExpr(struct parseTree* n) {
     return n;
 }
 
+// Returns non-zero if s looks like an immediate literal (dec/hex/bin/char)
+static int is_immediate_literal(const char* s) {
+    if (!s || !*s) return 0;
+    // char literal: 'x'
+    size_t n = strlen(s);
+    if (n >= 3 && s[0] == '\'' && s[n-1] == '\'') return 1;
+
+    // hex: 0x...
+    if (n >= 3 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+        for (size_t i = 2; i < n; ++i) {
+            if (!( (s[i] >= '0' && s[i] <= '9') ||
+                   (s[i] >= 'a' && s[i] <= 'f') ||
+                   (s[i] >= 'A' && s[i] <= 'F') )) return 0;
+        }
+        return 1;
+    }
+    // binary: 0b...
+    if (n >= 3 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) {
+        for (size_t i = 2; i < n; ++i) {
+            if (!(s[i] == '0' || s[i] == '1')) return 0;
+        }
+        return 1;
+    }
+    // decimal: all digits
+    int all_digit = 1;
+    for (size_t i = 0; i < n; ++i) {
+        if (!(s[i] >= '0' && s[i] <= '9')) { all_digit = 0; break; }
+    }
+    if (all_digit) return 1;
+
+    return 0;
+}
+
 static char* resolveLeafAtom(const char* name) {
     if (!name) return strdup("0");
+
+    // If it's a numeric/char immediate, move to r0 and return r0.
+    if (is_immediate_literal(name)) {
+        emit_mov("r0", (char*)name);
+        return strdup("r0");
+    }
 
     if (isRegName(name) || (name[0] == 't' && isdigit((unsigned char)name[1]))) {
         return strdup(name);
@@ -212,6 +251,11 @@ static char* resolveLValueName(struct parseTree* node) {
     }
     return name;
 }
+
+// --- IO lowering helpers (forward declarations) ---
+static void lower_io_out_chain(struct parseTree* n);
+static void lower_io_in_chain(struct parseTree* n);
+static void store_value_to_name(const char* dstName, const char* valueReg);
 
 char* processParseTreeAndGenerateIR(struct parseTree *pt) {
     if (!pt) return NULL;
@@ -293,7 +337,29 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         emit_ret();
         return NULL;
     }
+    if (strcmp(pt->name, "OutputToken") == 0) {
+        struct parseTree* exprNode = unwrapExpr(pt->left ? pt->left : pt->right);
+        char* val = exprNode ? processParseTreeAndGenerateIR(exprNode) : strdup("0");
+        emit_mov("outReg", val);          // asm: mov val, outReg
+        return NULL;
+    }
+    if (strcmp(pt->name, "IO_OUT") == 0) {
+        lower_io_out_chain(pt);
+        return NULL;
+    }
 
+    // Input: ^(InputToken ^(Identifier id)) или старая цепочка IO_IN
+    if (strcmp(pt->name, "InputToken") == 0) {
+        struct parseTree* idNode = pt->left ? pt->left : pt->right;
+        emit_mov("r0", "inReg");          // asm: mov inReg, r0
+        char* dstName = resolveLValueName(idNode);
+        store_value_to_name(dstName, "r0");
+        return strdup("r0");
+    }
+    if (strcmp(pt->name, "IO_IN") == 0) {
+        lower_io_in_chain(pt);
+        return strdup("r0");
+    }
     if (isOperation(pt->name)) {
         if (!pt->left || !pt->right) {
             handleError(2, pt->name);
@@ -310,11 +376,10 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
             }
 
             int addr;
-            // Сначала пытаемся найти как глобал/параметр в текущей таблице
             if (findSymbolAddressByName(globalSymTable, dst, &addr)) {
                 const char* r = regByAddr(addr);
                 if (r) {
-                    emit_mov(r, rhs); // крайне редкий случай, если сюда попал параметр
+                    emit_mov(r, rhs);
                     return NULL;
                 }
                 if (addr > 0) {
@@ -322,23 +387,17 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
                     emit_store(rhs, strdup(buf));
                     return NULL;
                 }
-                // если addr <= 0 и не r0..r3 — сюда мы не должны попадать
             }
-
-            // Локальная переменная (офсет от fp)
             if (locals_lookup(dst, &addr)) {
                 if (addr <= 0) {
                     emit_store_fp(rhs, addr);
                     return NULL;
                 } else {
-                    // редкий случай: абсолютный адрес — оставим старое поведение
                     char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
                     emit_store(rhs, strdup(buf));
                     return NULL;
                 }
             }
-
-            // Фоллбек: создадим «глобал» по абсолютному адресу (старое поведение)
             addr = nextFreeAddress;
             nextFreeAddress += 2;
             locals_insert(dst, addr);
@@ -384,6 +443,94 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         processParseTreeAndGenerateIR(pt->right);
     }
     return NULL;
+}
+static void store_value_to_name(const char* dstName, const char* valueReg) {
+    if (!dstName || !valueReg) return;
+
+    if (isRegName(dstName)) {
+        emit_mov(dstName, valueReg);
+        return;
+    }
+
+    int addr = 0;
+    if (findSymbolAddressByName(globalSymTable, dstName, &addr)) {
+        const char* r = regByAddr(addr);
+        if (r) {
+            emit_mov(r, valueReg);
+            return;
+        }
+        if (addr > 0) {
+            char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+            emit_store(valueReg, strdup(buf));
+            return;
+        }
+    }
+
+    if (locals_lookup(dstName, &addr)) {
+        if (addr <= 0) {
+            emit_store_fp((char*)valueReg, addr);
+            return;
+        } else {
+            char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+            emit_store(valueReg, strdup(buf));
+            return;
+        }
+    }
+
+    addr = nextFreeAddress; nextFreeAddress += 2;
+    locals_insert(dstName, addr);
+    char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+    emit_store(valueReg, strdup(buf));
+}
+
+static void lower_io_out_chain(struct parseTree* n) {
+    while (n) {
+        const char* tag = n->name ? n->name : "";
+        if (strcmp(tag, "IO_OUT") == 0) {
+            struct parseTree* item = n->left;
+            if (item && !item->left && !item->right && item->name && strcmp(item->name, "endl") == 0) {
+                emit_mov("outReg", "10"); // '\n'
+            } else {
+                char* val = processParseTreeAndGenerateIR(item);
+                emit_mov("outReg", val);
+            }
+            n = n->right;
+            continue;
+        }
+        if (strcmp(tag, "OutputToken") == 0) {
+            struct parseTree* exprNode = unwrapExpr(n->left ? n->left : n->right);
+            char* val = processParseTreeAndGenerateIR(exprNode);
+            emit_mov("outReg", val);
+            n = NULL; // одиночный узел, выходим
+            continue;
+        }
+        break;
+    }
+}
+
+static void lower_io_in_chain(struct parseTree* n) {
+    while (n) {
+        const char* tag = n->name ? n->name : "";
+        if (strcmp(tag, "IO_IN") == 0) {
+            struct parseTree* item = n->left;
+            // read from input register into r0 then store to variable
+            emit_mov("r0", "inReg");           // asm: mov inReg, r0
+            char* dstName = resolveLValueName(item);
+            store_value_to_name(dstName, "r0");
+            n = n->right;
+            continue;
+        }
+        if (strcmp(tag, "InputToken") == 0) {
+            // Grammar form: ^(InputToken ^(Identifier identifier))
+            struct parseTree* idNode = n->left;
+            emit_mov("r0", "inReg");
+            char* dstName = resolveLValueName(idNode);
+            store_value_to_name(dstName, "r0");
+            n = NULL;
+            continue;
+        }
+        break;
+    }
 }
 
 static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFalse) {
@@ -747,6 +894,19 @@ void generateIRFromCFGNode(struct cfgNode* node) {
     if (node->visited) return;
 
     node->visited = true;
+
+    if (node->name && strcmp(node->name, "OutputToken") == 0) {
+        if (node->parseTree) {
+            lower_io_out_chain(node->parseTree);
+        }
+        return;
+    }
+    if (node->name && strcmp(node->name, "InputToken") == 0) {
+        if (node->parseTree) {
+            lower_io_in_chain(node->parseTree);
+        }
+        return;
+    }
 
     if (isReturnNode(node->name)) {
         if (node->parseTree) {

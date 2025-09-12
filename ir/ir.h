@@ -2,7 +2,7 @@ typedef enum {
     IR_MOV, IR_ADD, IR_SUB, IR_MUL, IR_DIV, IR_REM,
      IR_NEG, IR_NOT, IR_AND, IR_OR,
      IR_LOAD, IR_STORE,
-     IR_JMP, IR_JEQ, IR_JGT, IR_JLT,
+     IR_JMP, IR_JEQ, IR_JGT, IR_JLT, IR_JNE,
      IR_PUSH, IR_POP,
      IR_CALL, IR_RET,
      IR_LABEL,
@@ -39,3 +39,7 @@ void emit_ret();
 void emit_call(const char* fname);
 void emit_store_fp(char* from, int off);
 void emit_load_fp(int off, char* to);
+void emit_push(char* item);
+void emit_pop(char* item);
+void emit_jumpeq(const char* cond, const char* label);
+void emit_jumpne(const char* cond, const char* label);

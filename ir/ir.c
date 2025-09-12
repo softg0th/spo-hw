@@ -92,15 +92,23 @@ void emit_jump(char* label) {
 }
 
 void emit_cond_jump_false(char* cond, char* label) {
-    emit_ir(IR_JEQ, cond, "0", label);
+    emit_ir(IR_JEQ, label, cond, NULL);
+}
+
+void emit_jumpeq(const char* cond, const char* label) {
+    emit_ir(IR_JEQ, label, cond, NULL);
 }
 
 void emit_jumpgt(const char* cond, const char* label) {
-    emit_ir(IR_JGT, cond,NULL,label);
+    emit_ir(IR_JGT, label, cond, NULL);
 }
 
 void emit_jumplt(const char* cond, const char* label) {
-    emit_ir(IR_JLT, cond,NULL,  label);
+    emit_ir(IR_JLT, label, cond, NULL);
+}
+
+void emit_jumpne(const char* cond, const char* label) {
+    emit_ir(IR_JNE, label, cond, NULL);
 }
 
 void emit_load(const char* ptr, const char* to) {
@@ -126,4 +134,12 @@ void emit_store_fp(char* from, int off) {
 void emit_load_fp(int off, char* to) {
     char buf[32]; snprintf(buf, sizeof(buf), "%d", off);
     emit_ir(IR_LOAD_FP, to, buf, NULL);
+}
+
+void emit_push(char* item) {
+    emit_ir(IR_PUSH, NULL, item, NULL);
+}
+
+void emit_pop(char* item) {
+    emit_ir(IR_POP, item, NULL, NULL);
 }

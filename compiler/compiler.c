@@ -9,11 +9,20 @@
 
 char* allocTemp();
 
+#define USE_BOOTSTRAP 1
 #ifndef ENABLE_DYNAMIC_RUNTIME
-#define ENABLE_DYNAMIC_RUNTIME 1
+#define ENABLE_DYNAMIC_RUNTIME 0
 #endif
 
 static int gFrameSize = 0;
+static char* g_func_epilogue_label = NULL;
+
+int nextFreeAddress = 0x1002;
+bool g_is_main = false;
+
+static const int IO_ADDR_OP  = 4104; // operator storage
+static const int IO_ADDR_IN0 = 4106; // first numeric input base
+static int g_io_in_count = 0;        // how many numeric inputs have been bound
 
 #if ENABLE_DYNAMIC_RUNTIME
 
@@ -36,6 +45,9 @@ static void locals_reset(void) {
     for (int i = 0; i < gLocalSymCount; ++i) free(gLocalSyms[i].name);
     gLocalSymCount = 0;
     gFrameSize = 0;
+    // ВАЖНО: сбрасываем аллокатор памяти под переменные на стартовый адрес.
+    nextFreeAddress = 0x1002; // 4098
+    g_io_in_count = 0;
 }
 
 
@@ -50,6 +62,23 @@ static bool locals_lookup(const char* name, int* outAddr) {
     return false;
 }
 
+static int is_ident_char(char c) {
+    return isalnum((unsigned char)c) || c == '_';
+}
+static int looks_like_ident_strict(const char* s) {
+    if (!s || !*s) return 0;
+    // имя вида [A-Za-z_][A-Za-z0-9_]*
+    if (!(isalpha((unsigned char)s[0]) || s[0]=='_')) return 0;
+    for (const char* p=s+1; *p; ++p)
+        if (!(isalnum((unsigned char)*p) || *p=='_')) return 0;
+
+    // служебки/стримы нам не нужны
+    if (!strcmp(s,"cin") || !strcmp(s,"cout") || !strcmp(s,"endl")) return 0;
+    if (!strncmp(s,"OP_",3)) return 0;
+
+    return 1;
+}
+
 static void locals_insert(const char* name, int addr) {
     if (!name) return;
     if (gLocalSymCount < (int)(sizeof(gLocalSyms)/sizeof(gLocalSyms[0]))) {
@@ -59,22 +88,79 @@ static void locals_insert(const char* name, int addr) {
     }
 }
 
+static bool findSymbolAddressByName(symbolTable* table, const char* name, int* outAddr) {
+    if (!table || !name) return false;
+    for (int i = 0; i < table->count; ++i) {
+        if (table->symbols[i].name && strcmp(table->symbols[i].name, name) == 0) {
+            if (outAddr) *outAddr = table->symbols[i].address;
+            return true;
+        }
+    }
+    return false;
+}
+static const char* regByAddr(int addr) {
+    switch (addr) {
+        case -1: return "r0";
+        case -2: return "r1";
+        case -3: return "r2";
+        case -4: return "r3";
+        default: return NULL;
+    }
+}
 static void plan_locals_in_tree(struct parseTree* pt) {
     if (!pt) return;
-    if (strcmp(pt->name, "VarDecl") == 0 || strcmp(pt->name, "VarDeclToken") == 0) {
-        struct parseTree* idNode = pt->left;
-        if (idNode) {
-            char* varName = idNode->name ? strdup(idNode->name) : NULL;
-            if (varName) {
-                int dummy;
-                if (!locals_lookup(varName, &dummy)) {
-                    gFrameSize += 2;
-                    locals_insert(varName, -gFrameSize);
-                }
-                free(varName);
+
+    // 0) если это чистый лист
+    if (!pt->left && !pt->right) {
+        const char* nm = pt->name ? pt->name : "";
+        if (looks_like_ident_strict(nm)) {
+            int dummy, addr = 0;
+
+            // если это параметр, у которого уже есть "адрес" = регистр (отрицательные -1..-4), то пропускаем
+            if (findSymbolAddressByName(globalSymTable, nm, &addr)) {
+                if (regByAddr(addr) != NULL) return; // r0..r3
+            }
+
+            if (!locals_lookup(nm, &dummy)) {
+                int a = nextFreeAddress; nextFreeAddress += 2;
+                locals_insert(nm, a);
+                // gFrameSize нам больше не нужен, но можно вести для совместимости:
+                gFrameSize += 2;
+            }
+        }
+        return;
+    }
+
+    // 1) специализированный случай: OP_PLACE (lvalue-узлы)
+    if (!strcmp(pt->name,"OP_PLACE") && pt->left && pt->left->name) {
+        const char* nm = pt->left->name;
+        if (looks_like_ident_strict(nm)) {
+            int dummy, addr=0;
+            if (findSymbolAddressByName(globalSymTable, nm, &addr)) {
+                if (regByAddr(addr) != NULL) return;
+            }
+            if (!locals_lookup(nm, &dummy)) {
+                int a = nextFreeAddress; nextFreeAddress += 2;
+                locals_insert(nm, a);
+                gFrameSize += 2;
             }
         }
     }
+
+    // 2) VarDecl — оставляем как было (ничего не ломаем)
+    if (!strcmp(pt->name,"VarDecl") || !strcmp(pt->name,"VarDeclToken")) {
+        struct parseTree* idNode = pt->left;
+        if (idNode && idNode->name && looks_like_ident_strict(idNode->name)) {
+            int dummy;
+            if (!locals_lookup(idNode->name, &dummy)) {
+                int a = nextFreeAddress; nextFreeAddress += 2;
+                locals_insert(idNode->name, a);
+                gFrameSize += 2;
+            }
+        }
+    }
+
+    // 3) обычный обход
     plan_locals_in_tree(pt->left);
     plan_locals_in_tree(pt->right);
 }
@@ -94,7 +180,7 @@ static bool isOperation(char* ptName) {
 }
 
 int tempCounter = 0;
-int nextFreeAddress = 0x1000;
+;
 
 
 char* allocTemp() {
@@ -103,15 +189,7 @@ char* allocTemp() {
     return buf;
 }
 
-static const char* regByAddr(int addr) {
-    switch (addr) {
-        case -1: return "r0";
-        case -2: return "r1";
-        case -3: return "r2";
-        case -4: return "r3";
-        default: return NULL;
-    }
-}
+
 
 static bool isRegName(const char* s) {
     return s && (
@@ -122,16 +200,7 @@ static bool isRegName(const char* s) {
     );
 }
 
-static bool findSymbolAddressByName(symbolTable* table, const char* name, int* outAddr) {
-    if (!table || !name) return false;
-    for (int i = 0; i < table->count; ++i) {
-        if (table->symbols[i].name && strcmp(table->symbols[i].name, name) == 0) {
-            if (outAddr) *outAddr = table->symbols[i].address;
-            return true;
-        }
-    }
-    return false;
-}
+
 
 static struct parseTree* unwrapExpr(struct parseTree* n) {
     if (!n) return NULL;
@@ -174,45 +243,91 @@ static int is_immediate_literal(const char* s) {
     return 0;
 }
 
+static int parse_char_lit(const char* s, int* out) {
+    size_t n = s ? strlen(s) : 0;
+    if (n >= 3 && s[0]=='\'' && s[n-1]=='\'') {
+        if (n == 3) { *out = (unsigned char)s[1]; return 1; }
+        if (n == 4 && s[1]=='\\') {
+            char c = s[2];
+            int v = (c=='n')?10 : (c=='t')?9 : (c=='r')?13 : (unsigned char)c;
+            *out = v; return 1;
+        }
+    }
+    return 0;
+}
+
+static int one_char_dq_string_to_code(const char* s, int* out) {
+    size_t n = s ? strlen(s) : 0;
+    if (n == 3 && s[0]=='"' && s[2]=='"') { *out = (unsigned char)s[1]; return 1; }
+    if (n == 4 && s[0]=='"' && s[1]=='\\' && s[3]=='"') {
+        char c = s[2];
+        int v = (c=='n')?10 : (c=='t')?9 : (c=='r')?13 : (unsigned char)c;
+        *out = v; return 1;
+    }
+    return 0;
+}
+
+// compiler.c
 static char* resolveLeafAtom(const char* name) {
     if (!name) return strdup("0");
 
-    // If it's a numeric/char immediate, move to r0 and return r0.
-    if (is_immediate_literal(name)) {
-        emit_mov("r0", (char*)name);
-        return strdup("r0");
+    // 1) символьные литералы: вернуть ИММЕДИАТ (без emit_mov здесь!)
+    int ch = 0;
+    if (parse_char_lit(name, &ch)) {
+        char buf[16]; snprintf(buf, sizeof(buf), "%d", ch);
+        return strdup(buf);
+    }
+    if (one_char_dq_string_to_code(name, &ch)) {
+        char buf[16]; snprintf(buf, sizeof(buf), "%d", ch);
+        return strdup(buf);
     }
 
-    if (isRegName(name) || (name[0] == 't' && isdigit((unsigned char)name[1]))) {
+    // 2) чистый литерал: вернуть строку-иммедиат
+    if (is_immediate_literal(name)) {
         return strdup(name);
     }
 
+    // 3) регистры/временные значения — вернуть как есть
+    if (isRegName(name) || (name[0]=='t' && isdigit((unsigned char)name[1]))) {
+        return strdup(name);
+    }
+
+    // 4) глобальные символы / регистровые псевдоадреса
     int addr = 0;
     if (findSymbolAddressByName(globalSymTable, name, &addr)) {
         const char* r = regByAddr(addr);
         if (r) {
-            return strdup(r);
+            return strdup(r); // переменная — это регистр r0..r3
         } else if (addr > 0) {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d", addr);
-            char* addrStr = strdup(buf);
-            emit_load(addrStr, "r0");
-            return strdup("r0");
-        }
-    }
-
-    if (locals_lookup(name, &addr)) {
-        const char* r = regByAddr(addr);
-        if (r) {
-            return strdup(r);
-        } else {
-            char buf[32];
-            snprintf(buf, sizeof(buf), "%d", addr);
+            // память: реально загрузим в r0 и вернём r0
+            char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
             emit_load(strdup(buf), "r0");
             return strdup("r0");
         }
     }
-    return strdup(name);
+
+    // 5) локальные (через fp-смещения или абсолют)
+    if (locals_lookup(name, &addr)) {
+        const char* r = regByAddr(addr);
+        if (r) return strdup(r);
+
+        if (addr <= 0) {
+            // loadfp [fp+off] → r0
+            emit_load_fp(addr, "r0");
+            return strdup("r0");
+        } else {
+            char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+            emit_load(strdup(buf), "r0");
+            return strdup("r0");
+        }
+    }
+
+    // 6) ленивое размещение новой переменной в памяти
+    int lazy = nextFreeAddress; nextFreeAddress += 2;
+    locals_insert(name, lazy);
+    char buf[32]; snprintf(buf, sizeof(buf), "%d", lazy);
+    emit_load(strdup(buf), "r0");
+    return strdup("r0");
 }
 
 static char* extractIdentFromLValue(struct parseTree* node) {
@@ -334,13 +449,15 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         exprNode = unwrapExpr(exprNode);
         char* val = exprNode ? processParseTreeAndGenerateIR(exprNode) : strdup("0");
         emit_mov("r0", val);
-        emit_ret();
+        emit_jump(g_func_epilogue_label);
         return NULL;
     }
     if (strcmp(pt->name, "OutputToken") == 0) {
         struct parseTree* exprNode = unwrapExpr(pt->left ? pt->left : pt->right);
         char* val = exprNode ? processParseTreeAndGenerateIR(exprNode) : strdup("0");
-        emit_mov("outReg", val);          // asm: mov val, outReg
+        emit_mov("r0", val);
+        emit_call("__print_u16");
+        emit_call("__io_println");
         return NULL;
     }
     if (strcmp(pt->name, "IO_OUT") == 0) {
@@ -348,40 +465,51 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         return NULL;
     }
 
-    // Input: ^(InputToken ^(Identifier id)) или старая цепочка IO_IN
     if (strcmp(pt->name, "InputToken") == 0) {
         struct parseTree* idNode = pt->left ? pt->left : pt->right;
-        emit_mov("r0", "inReg");          // asm: mov inReg, r0
-        char* dstName = resolveLValueName(idNode);
-        store_value_to_name(dstName, "r0");
-        return strdup("r0");
+        char* varName = extractIdentFromLValue(idNode);
+        int addr;
+        if (!locals_lookup(varName, &addr)) {
+            int a = IO_ADDR_IN0 + 2 * g_io_in_count; // 4106, 4108, 4110, ...
+            locals_insert(varName, a);
+        }
+        g_io_in_count++;
+        free(varName);
+        return NULL; // no input here; bootstrap does it
     }
+    if (strcmp(pt->name, "OpInputToken") == 0) {
+        struct parseTree* idNode = pt->left ? pt->left : pt->right;
+        char* varName = extractIdentFromLValue(idNode);
+        int dummy;
+        if (!locals_lookup(varName, &dummy)) {
+            locals_insert(varName, IO_ADDR_OP); // bind to 4104
+        }
+        free(varName);
+        return NULL; // no runtime call here
+    }
+
     if (strcmp(pt->name, "IO_IN") == 0) {
-        lower_io_in_chain(pt);
-        return strdup("r0");
+        return NULL;
     }
     if (isOperation(pt->name)) {
         if (!pt->left || !pt->right) {
             handleError(2, pt->name);
             return strdup("BAD_OP");
         }
+
+        // Присваивание — оставь как у тебя (работает), ниже меняем только арифметику
         if (strcmp(pt->name, "OP_ASSIGN") == 0) {
             char* dst = resolveLValueName(pt->left);
             char* rhs = processParseTreeAndGenerateIR(pt->right);
 
-            // Параметры в r0..r3
             if (isRegName(dst)) {
                 emit_mov(dst, rhs);
                 return NULL;
             }
-
             int addr;
             if (findSymbolAddressByName(globalSymTable, dst, &addr)) {
                 const char* r = regByAddr(addr);
-                if (r) {
-                    emit_mov(r, rhs);
-                    return NULL;
-                }
+                if (r) { emit_mov(r, rhs); return NULL; }
                 if (addr > 0) {
                     char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
                     emit_store(rhs, strdup(buf));
@@ -389,27 +517,22 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
                 }
             }
             if (locals_lookup(dst, &addr)) {
-                if (addr <= 0) {
-                    emit_store_fp(rhs, addr);
-                    return NULL;
-                } else {
-                    char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
-                    emit_store(rhs, strdup(buf));
-                    return NULL;
-                }
-            }
-            addr = nextFreeAddress;
-            nextFreeAddress += 2;
-            locals_insert(dst, addr);
-            {
+                if (addr <= 0) { emit_store_fp(rhs, addr); return NULL; }
                 char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
                 emit_store(rhs, strdup(buf));
+                return NULL;
             }
+            addr = nextFreeAddress; nextFreeAddress += 2;
+            locals_insert(dst, addr);
+            { char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
+                emit_store(rhs, strdup(buf)); }
             return NULL;
         }
 
+        /*
         char* lhs = processParseTreeAndGenerateIR(pt->left);
         char* rhs = processParseTreeAndGenerateIR(pt->right);
+        */
 #if ENABLE_DYNAMIC_RUNTIME
         const char* fname = NULL;
         if      (strcmp(pt->name, "OP_ADD") == 0) fname = "__dyn_add";
@@ -417,23 +540,36 @@ char* processParseTreeAndGenerateIR(struct parseTree *pt) {
         else if (strcmp(pt->name, "OP_MUL") == 0) fname = "__dyn_mul";
         else if (strcmp(pt->name, "OP_DIV") == 0) fname = "__dyn_div";
         else if (strcmp(pt->name, "OP_MOD") == 0) fname = "__dyn_mod";
-
-        char* result = call_dyn_binary(fname, lhs, rhs);
+        emit_mov("r1", rhs);    // rhs → r1
+        emit_mov("r0", lhs);    // lhs → r0
+        emit_call(fname);
+        char* result = strdup("r0");
 #else
-        char* result = allocTemp();
-        if (strcmp(pt->name, "OP_ADD") == 0) {
-            emit_add(result, lhs, rhs);
-        } else if (strcmp(pt->name, "OP_SUB") == 0) {
-            emit_sub(result, lhs, rhs);
-        } else if (strcmp(pt->name, "OP_MUL") == 0) {
-            emit_mul(result, lhs, rhs);
-        } else if (strcmp(pt->name, "OP_DIV") == 0) {
-            emit_div(result, lhs, rhs);
-        } else if (strcmp(pt->name, "OP_MOD") == 0) {
-            emit_rem(result, lhs, rhs);
-        }
+        char* lhs = processParseTreeAndGenerateIR(pt->left);
+        char* rhs = processParseTreeAndGenerateIR(pt->right);
+
+        // materialize: r1 = lhs, r0 = rhs
+        emit_mov("r0", lhs);
+        emit_push("r0");
+        emit_mov("r0", rhs);
+        emit_pop("r1");        // r1=lhs, r0=rhs
+
+        // хотим r0=lhs, r1=rhs → свап через стек (без лишних mov-ов в асме)
+        emit_push("r0");       // [ rhs ]
+        emit_mov("r0", "r1");  // r0 = lhs
+        emit_pop("r1");        // r1 = rhs
+
+        if      (strcmp(pt->name, "OP_ADD") == 0) emit_add("r0","r0","r1"); // r0 += r1
+        else if (strcmp(pt->name, "OP_SUB") == 0) emit_sub("r0","r0","r1"); // r0 -= r1
+        else if (strcmp(pt->name, "OP_MUL") == 0) emit_mul("r0","r0","r1"); // r0 *= r1
+        else if (strcmp(pt->name, "OP_DIV") == 0) emit_div("r0","r0","r1"); // r0 /= r1
+        else if (strcmp(pt->name, "OP_MOD") == 0) emit_rem("r0","r0","r1"); // r0 %= r1
+
+        return strdup("r0");
 #endif
-        return result;
+        if (pt->left)  processParseTreeAndGenerateIR(pt->left);
+        if (pt->right) processParseTreeAndGenerateIR(pt->right);
+        return NULL;
     }
 
     if (pt->left) {
@@ -477,8 +613,11 @@ static void store_value_to_name(const char* dstName, const char* valueReg) {
         }
     }
 
-    addr = nextFreeAddress; nextFreeAddress += 2;
+    // Новый символ — выделяем свежий адрес
+    addr = nextFreeAddress;
+    nextFreeAddress += 2;
     locals_insert(dstName, addr);
+
     char buf[32]; snprintf(buf, sizeof(buf), "%d", addr);
     emit_store(valueReg, strdup(buf));
 }
@@ -488,20 +627,24 @@ static void lower_io_out_chain(struct parseTree* n) {
         const char* tag = n->name ? n->name : "";
         if (strcmp(tag, "IO_OUT") == 0) {
             struct parseTree* item = n->left;
-            if (item && !item->left && !item->right && item->name && strcmp(item->name, "endl") == 0) {
-                emit_mov("outReg", "10"); // '\n'
-            } else {
-                char* val = processParseTreeAndGenerateIR(item);
-                emit_mov("outReg", val);
-            }
+            if (item && !item->left && !item->right &&
+                item->name && strcmp(item->name, "endl") == 0) {
+                emit_call("__io_println");
+                } else {
+                    char* val = processParseTreeAndGenerateIR(item);
+                    emit_mov("r0", val);
+                    emit_call("__print_u16");
+                }
             n = n->right;
             continue;
         }
         if (strcmp(tag, "OutputToken") == 0) {
             struct parseTree* exprNode = unwrapExpr(n->left ? n->left : n->right);
             char* val = processParseTreeAndGenerateIR(exprNode);
-            emit_mov("outReg", val);
-            n = NULL; // одиночный узел, выходим
+            emit_mov("r0", val);
+            emit_call("__print_u16");
+            emit_call("__io_println");
+            n = NULL;
             continue;
         }
         break;
@@ -513,19 +656,27 @@ static void lower_io_in_chain(struct parseTree* n) {
         const char* tag = n->name ? n->name : "";
         if (strcmp(tag, "IO_IN") == 0) {
             struct parseTree* item = n->left;
-            // read from input register into r0 then store to variable
-            emit_mov("r0", "inReg");           // asm: mov inReg, r0
-            char* dstName = resolveLValueName(item);
-            store_value_to_name(dstName, "r0");
+            char* varName = extractIdentFromLValue(item);
+            int addr;
+            if (!locals_lookup(varName, &addr)) {
+                int a = IO_ADDR_IN0 + 2 * g_io_in_count;
+                locals_insert(varName, a);
+            }
+            g_io_in_count++;
+            free(varName);
             n = n->right;
             continue;
         }
         if (strcmp(tag, "InputToken") == 0) {
-            // Grammar form: ^(InputToken ^(Identifier identifier))
             struct parseTree* idNode = n->left;
-            emit_mov("r0", "inReg");
-            char* dstName = resolveLValueName(idNode);
-            store_value_to_name(dstName, "r0");
+            char* varName = extractIdentFromLValue(idNode);
+            int addr;
+            if (!locals_lookup(varName, &addr)) {
+                int a = IO_ADDR_IN0 + 2 * g_io_in_count;
+                locals_insert(varName, a);
+            }
+            g_io_in_count++;
+            free(varName);
             n = NULL;
             continue;
         }
@@ -537,146 +688,85 @@ static bool lowerCondFromParseTree(struct parseTree* pt, const char* labelIfFals
     if (!pt || !pt->name) return false;
     const char* tag = pt->name;
 
-    if (strcmp(tag, "OP_EQ") == 0 ||
-        strcmp(tag, "OP_NEQ") == 0 ||
-        strcmp(tag, "OP_LT") == 0 ||
-        strcmp(tag, "OP_GT") == 0 ||
-        strcmp(tag, "OP_LE") == 0 ||
-        strcmp(tag, "OP_GE") == 0) {
-
-        struct parseTree* L = unwrapExpr(pt->left);
-        struct parseTree* R = unwrapExpr(pt->right);
-
-        char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
-        char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
-
-#if ENABLE_DYNAMIC_RUNTIME
-        const char* fname = NULL;
-        if      (strcmp(tag, "OP_EQ") == 0)  fname = "__dyn_eq";
-        else if (strcmp(tag, "OP_NEQ") == 0) fname = "__dyn_neq";
-        else if (strcmp(tag, "OP_LT") == 0)  fname = "__dyn_lt";
-        else if (strcmp(tag, "OP_GT") == 0)  fname = "__dyn_gt";
-        else if (strcmp(tag, "OP_LE") == 0)  fname = "__dyn_le";
-        else if (strcmp(tag, "OP_GE") == 0)  fname = "__dyn_ge";
-
-        char* tbool = call_dyn_binary(fname, lhs, rhs);
-        emit_cond_jump_false(tbool, (char*)labelIfFalse);
-        return true;
-#else
-        char* tcond = allocTemp();
-        emit_sub(tcond, lhs, rhs);
-
-        if (strcmp(tag, "OP_EQ") == 0) {
-            // false when tcond != 0
-            emit_jumpgt(tcond, labelIfFalse);
-            emit_jumplt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_NEQ") == 0) {
-            // false when tcond == 0
-            emit_cond_jump_false(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_GT") == 0) {
-            // false when tcond <= 0  → (==0) or (<0)
-            emit_cond_jump_false(tcond, labelIfFalse);
-            emit_jumplt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_LT") == 0) {
-            // false when tcond >= 0  → (==0) or (>0)
-            emit_cond_jump_false(tcond, labelIfFalse);
-            emit_jumpgt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_GE") == 0) {
-            // false when tcond < 0
-            emit_jumplt(tcond, labelIfFalse);
-        } else if (strcmp(tag, "OP_LE") == 0) {
-            // false when tcond > 0
-            emit_jumpgt(tcond, labelIfFalse);
+    if (strcmp(tag, "OP_EQ")  && strcmp(tag, "OP_NEQ") &&
+        strcmp(tag, "OP_LT")  && strcmp(tag, "OP_GT")  &&
+        strcmp(tag, "OP_LE")  && strcmp(tag, "OP_GE")) {
+        return false; // не сравнение
         }
 
-        return true;
-#endif
-    }
+    struct parseTree* L = unwrapExpr(pt->left);
+    struct parseTree* R = unwrapExpr(pt->right);
+    char* lhs = L ? processParseTreeAndGenerateIR(L) : strdup("0");
+    char* rhs = R ? processParseTreeAndGenerateIR(R) : strdup("0");
 
-    return false;
+    // r0 = lhs, r1 = rhs
+    emit_mov("r0", lhs);
+    emit_push("r0");
+    emit_mov("r0", rhs);
+    emit_pop("r1");        // r1=lhs, r0=rhs
+    emit_push("r0");
+    emit_mov("r0", "r1");  // r0=lhs
+    emit_pop("r1");        // r1=rhs
+
+    // r0 = lhs - rhs
+    emit_sub("r0", "r0", "r1");
+
+    if (strcmp(tag, "OP_EQ") == 0) {           // false if r0 != 0
+        emit_jumpgt("r0", (char*)labelIfFalse);
+        emit_jumplt("r0", (char*)labelIfFalse);
+    } else if (strcmp(tag, "OP_NEQ") == 0) {   // false if r0 == 0
+        emit_jumpeq("r0", (char*)labelIfFalse);
+    } else if (strcmp(tag, "OP_GT") == 0) {    // lhs>rhs → r0>0 → false if r0<=0
+        emit_jumpeq("r0", (char*)labelIfFalse);
+        emit_jumplt("r0", (char*)labelIfFalse);
+    } else if (strcmp(tag, "OP_LT") == 0) {    // lhs<rhs → r0<0 → false if r0>=0
+        emit_jumpeq("r0", (char*)labelIfFalse);
+        emit_jumpgt("r0", (char*)labelIfFalse);
+    } else if (strcmp(tag, "OP_GE") == 0) {    // false if r0<0
+        emit_jumplt("r0", (char*)labelIfFalse);
+    } else if (strcmp(tag, "OP_LE") == 0) {    // false if r0>0
+        emit_jumpgt("r0", (char*)labelIfFalse);
+    }
+    return true;
 }
 
+// compiler.c
 void processCondExpression(const char* exprStr, const char* labelIfFalse) {
-    char lhs[64] = {0}, rhs[64] = {0}, op[8] = {0};
-    if (!exprStr) {
-        emit_jump((char*)labelIfFalse);
-        return;
-    }
+    if (!exprStr || !*exprStr) { emit_jump((char*)labelIfFalse); return; }
 
-    if (strlen(exprStr) == 0) {
-        emit_jump((char*)labelIfFalse);
-        return;
-    }
+    // если нет операторов сравнения — трактуем как "truthy(expr)"
     if (!strpbrk(exprStr, "=!<>")) {
-        char* endptr = NULL;
-        long v = strtol(exprStr, &endptr, 10);
-        if (endptr && *endptr == '\0') {
-            if (v == 0) {
-                emit_jump((char*)labelIfFalse);
-            }
-            return;
-        }
         char* atom = resolveLeafAtom(exprStr);
-#if ENABLE_DYNAMIC_RUNTIME
-        char* tbool = call_dyn_binary("__dyn_truthy", atom, NULL);
-        emit_cond_jump_false(tbool, (char*)labelIfFalse);
-#else
-        char* tcond = allocTemp();
-        emit_mov(tcond, atom);
-        emit_cond_jump_false(tcond, (char*)labelIfFalse);
-#endif
+        emit_mov("r0", atom);
+        // false если r0 == 0
+        emit_jumpeq("r0", (char*)labelIfFalse);
         free(atom);
         return;
     }
+
+    char lhs[64]={0}, rhs[64]={0}, op[8]={0};
     splitCondExpr(exprStr, lhs, op, rhs);
 
-#if ENABLE_DYNAMIC_RUNTIME
-    char* lhsAtom = resolveLeafAtom(lhs);
-    char* rhsAtom = resolveLeafAtom(rhs);
+    char* L = resolveLeafAtom(lhs);
+    char* R = resolveLeafAtom(rhs);
 
-    const char* fname = NULL;
-    if      (strcmp(op, "==") == 0) fname = "__dyn_eq";
-    else if (strcmp(op, "!=") == 0) fname = "__dyn_neq";
-    else if (strcmp(op, "<")  == 0) fname = "__dyn_lt";
-    else if (strcmp(op, ">")  == 0) fname = "__dyn_gt";
-    else if (strcmp(op, "<=") == 0) fname = "__dyn_le";
-    else if (strcmp(op, ">=") == 0) fname = "__dyn_ge";
+    // r0 = L, r1 = R
+    emit_mov("r0", L);
+    emit_push("r0");
+    emit_mov("r0", R);
+    emit_pop("r1");        // r1=L, r0=R
+    emit_push("r0");
+    emit_mov("r0", "r1");  // r0=L
+    emit_pop("r1");        // r1=R
+    emit_sub("r0", "r0", "r1"); // r0 = L - R
 
-    char* tbool = call_dyn_binary(fname, lhsAtom, rhsAtom);
-    emit_cond_jump_false(tbool, (char*)labelIfFalse);
-    free(lhsAtom);
-    free(rhsAtom);
-    return;
-#else
-    char* lhsAtom = resolveLeafAtom(lhs);
-    char* rhsAtom = resolveLeafAtom(rhs);
-
-    char* tmp = allocTemp();
-    emit_mov(tmp, rhsAtom);
-    char* tcond = allocTemp();
-    emit_sub(tcond, lhsAtom, tmp);
-    free(lhsAtom);
-    free(rhsAtom);
-
-    if (strcmp(op, "==") == 0) {
-        emit_jumpgt(tcond, (char*)labelIfFalse);
-        emit_jumplt(tcond, (char*)labelIfFalse);
-    } else if (strcmp(op, "!=") == 0) {
-        emit_cond_jump_false(tcond, (char*)labelIfFalse);
-    } else if (strcmp(op, ">") == 0) {
-        emit_cond_jump_false(tcond, (char*)labelIfFalse);
-        emit_jumplt(tcond, (char*)labelIfFalse);
-    } else if (strcmp(op, "<") == 0) {
-        emit_cond_jump_false(tcond, (char*)labelIfFalse);
-        emit_jumpgt(tcond, (char*)labelIfFalse);
-    } else if (strcmp(op, ">=") == 0) {
-        emit_jumplt(tcond, (char*)labelIfFalse);
-    } else if (strcmp(op, "<=") == 0) {
-        emit_jumpgt(tcond, (char*)labelIfFalse);
-    } else {
-        emit_cond_jump_false(tcond, (char*)labelIfFalse);
-    }
-#endif
+    if      (!strcmp(op, "==")) { emit_jumpgt("r0", (char*)labelIfFalse); emit_jumplt("r0", (char*)labelIfFalse); }
+    else if (!strcmp(op, "!=")) { emit_jumpeq("r0", (char*)labelIfFalse); }
+    else if (!strcmp(op,  ">"))  { emit_jumpeq("r0", (char*)labelIfFalse); emit_jumplt("r0", (char*)labelIfFalse); }
+    else if (!strcmp(op,  "<"))  { emit_jumpeq("r0", (char*)labelIfFalse); emit_jumpgt("r0", (char*)labelIfFalse); }
+    else if (!strcmp(op, ">="))  { emit_jumplt("r0", (char*)labelIfFalse); }
+    else if (!strcmp(op, "<="))  { emit_jumpgt("r0", (char*)labelIfFalse); }
+    else { emit_jumpeq("r0", (char*)labelIfFalse); } // дефолт: как truthy(r0)
 }
 
 char* extractExprFromParseTree(struct parseTree* pt) {
@@ -734,9 +824,17 @@ static char* lowerSimpleArithExpr(const char* expr) {
 
     char* la = resolveLeafAtom(l);
     char* ra = resolveLeafAtom(r);
-    char* t  = allocTemp();
-    if (op=='+') emit_add(t, la, ra); else emit_sub(t, la, ra);
-    return t;
+
+    emit_mov("r0", la);
+    emit_push("r0");
+    emit_mov("r0", ra);
+    emit_pop("r1");
+
+    if (op=='+') emit_add("r1", "r1", "r0");
+    else         emit_sub("r1", "r1", "r0");
+
+    emit_mov("r0", "r1");
+    return strdup("r0");
 }
 
 // --- Simple string expression parser for fallback lowering (calls + precedence) ---
@@ -749,9 +847,6 @@ static int is_ident_start(char c) {
     return isalpha((unsigned char)c) || c == '_';
 }
 
-static int is_ident_char(char c) {
-    return isalnum((unsigned char)c) || c == '_';
-}
 
 static char* parse_expr_str(const char** p);
 
@@ -765,13 +860,20 @@ static char* apply_binop_from_str(const char* op, char* a, char* b) {
     else if (strcmp(op, "%") == 0) fname = "__dyn_mod";
     return call_dyn_binary(fname, a, b);
 #else
-    char* t = allocTemp();
-    if      (strcmp(op, "+") == 0) emit_add(t, a, b);
-    else if (strcmp(op, "-") == 0) emit_sub(t, a, b);
-    else if (strcmp(op, "*") == 0) emit_mul(t, a, b);
-    else if (strcmp(op, "/") == 0) emit_div(t, a, b);
-    else if (strcmp(op, "%") == 0) emit_rem(t, a, b);
-    return t;
+    // NON-DYNAMIC: (a op b) → r0
+    emit_mov("r0", a);
+    emit_push("r0");
+    emit_mov("r0", b);
+    emit_pop("r1");
+
+    if      (strcmp(op, "+") == 0) emit_add("r1", "r1", "r0");
+    else if (strcmp(op, "-") == 0) emit_sub("r1", "r1", "r0");
+    else if (strcmp(op, "*") == 0) emit_mul("r1", "r1", "r0");
+    else if (strcmp(op, "/") == 0) emit_div("r1", "r1", "r0");
+    else if (strcmp(op, "%") == 0) emit_rem("r1", "r1", "r0");
+
+    emit_mov("r0", "r1");
+    return strdup("r0");
 #endif
 }
 
@@ -909,17 +1011,15 @@ void generateIRFromCFGNode(struct cfgNode* node) {
     }
 
     if (isReturnNode(node->name)) {
-        if (node->parseTree) {
-            struct parseTree* t = unwrapExpr(node->parseTree);
-            char* val = processParseTreeAndGenerateIR(t);
-            emit_mov("r0", val);
-            emit_ret();
-            return;
+        // В main игнорируем голый 'return;' (без выражения), чтобы не делать ранний прыжок в эпилог
+        if (g_is_main && (!node->parseTree)) {
+            return; // просто не генерим ничего для пустого return в main
         }
-        char* expr = extractToken(node->name);
-        char* atom = lowerExprFromString(expr);
-        emit_mov("r0", atom);
-        emit_ret();
+
+        struct parseTree* exprNode = node->parseTree ? unwrapExpr(node->parseTree) : NULL;
+        char* val = exprNode ? processParseTreeAndGenerateIR(exprNode) : strdup("0");
+        emit_mov("r0", val);
+        emit_jump(g_func_epilogue_label);
         return;
     }
 
@@ -1021,8 +1121,9 @@ void checkFullGraph(struct funcNode *fn) {
     } else {
         printf("[FUNC] label=<NULL>\n");
     }
-
+    g_is_main = (fn->identifier && strcmp(fn->identifier, "func_0") == 0);
     locals_reset();
+    g_func_epilogue_label = allocLabel();
 
     struct cfgNode *arr[4096];
     bool used[65536] = {0};
@@ -1034,6 +1135,8 @@ void checkFullGraph(struct funcNode *fn) {
     for (int i = 0; i < cnt; i++) {
         generateIRFromCFGNode(arr[i]);
     }
+    emit_label(g_func_epilogue_label);
+    emit_ret();
 }
 void traverseGraph(struct programGraph *graph) {
     for (int i = 0; i < graph->funcCount; i++) {

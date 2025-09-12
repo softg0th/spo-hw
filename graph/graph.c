@@ -834,6 +834,11 @@ void collectNodes(struct cfgNode *node, struct cfgNode **list, bool *used, int *
     collectNodes(node->defaultBranch, list, used, count);
 }
 
+static inline bool isFuncExitNode(struct cfgNode *n, const struct funcNode *fn) {
+    if (n && fn && fn->cfgExit) return n == fn->cfgExit;
+    return n && n->name && strcmp(n->name, "func_exit") == 0;
+}
+
 static struct parseTree* buildExpression(struct cfgNode **arr, int *pos, int cnt)
 {
     if (*pos >= cnt) {
@@ -915,38 +920,45 @@ struct cfgNode *currentParseNode;
 int pulse = 0;
 
 void traversePartOfGraph() {
-    struct cfgNode *tempNode;
-    tempNode = currentParseNode->defaultBranch;
+    if (!currentParseNode) return;
 
-    if(isOperation(currentParseNode->defaultBranch->ast)) {
-        tempNode = tempNode->defaultBranch;
+    struct cfgNode *tempNode = currentParseNode->defaultBranch;
+    if (!tempNode) return;
+
+    if (tempNode->ast && isOperation(tempNode->ast)) {
+        if (tempNode->defaultBranch) {
+            tempNode = tempNode->defaultBranch;
+        } else {
+            // нет куда «перешагнуть» — выходим
+            return;
+        }
     }
     currentParseNode->defaultBranch = tempNode;
 }
 
 
 void removeExtraTokens(struct funcNode *fn) {
-    if (!fn || !fn->cfgEntry)
-        return;
+    if (!fn || !fn->cfgEntry) return;
 
     struct cfgNode *arr[4096];
-    bool used[65536];
-    memset(used, 0, sizeof(used));
+    bool used[65536] = {0};
     int cnt = 0;
     collectNodes(fn->cfgEntry, arr, used, &cnt);
-    int i = 0;
-    while (i < cnt)
-    {
-        struct cfgNode *nd = arr[i];
 
-        if(!isOperation(nd->ast)) {
+    for (int i = 0; i < cnt; i++) {
+        struct cfgNode *nd = arr[i];
+        if (!nd) continue;
+
+        if (!isOperation(nd->ast)) {
             currentParseNode = nd;
         }
-        if (strcmp(nd->defaultBranch->name, "func_exit") == 0) {
-            return;
+
+        struct cfgNode *db = nd->defaultBranch;
+        if (isFuncExitNode(db, fn)) {
+            break;
         }
-            traversePartOfGraph();
-            i++;
+
+        traversePartOfGraph();
     }
 }
 
